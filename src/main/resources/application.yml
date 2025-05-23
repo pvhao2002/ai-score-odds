@@ -1,0 +1,30 @@
+server:
+  port: 2308
+  servlet:
+    context-path: /api
+
+application:
+  datasource:
+    read:
+      jdbc-url: "jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:kira}?useUnicode=true&createDatabaseIfNotExist=true"
+      username: "${DB_USERNAME:root}"
+      password: "${DB_PASSWORD:1234}"
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      maximum-pool-size: 2
+    write:
+      jdbc-url: "jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:kira}?useUnicode=true&createDatabaseIfNotExist=true"
+      username: "${DB_USERNAME:root}"
+      password: "${DB_PASSWORD:1234}"
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      maximum-pool-size: 2
+spring:
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+logging:
+  level:
+    root: info
+  file:
+    name: target/kira.log
