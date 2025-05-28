@@ -34,7 +34,11 @@ public class MainController {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
     @GetMapping(value = "current", produces = MediaType.TEXT_PLAIN_VALUE)
-    public Object current(@RequestParam(value = "league_name", defaultValue = "") String leagueName) {
+    public Object current(
+            @RequestParam(value = "league_name", defaultValue = "") String leagueName,
+            @RequestParam(value = "range_type", defaultValue = "full") String rangeType,
+            @RequestParam(value = "showOdd", required = false) Boolean showOdd
+    ) {
         var sql = """
                 SELECT e.event_id,
                        e.event_name,
@@ -43,15 +47,24 @@ public class MainController {
                        o.odd_type,
                        o.odd_value
                 FROM events e
-                         INNER JOIN odds o ON e.event_id = o.event_id
-                WHERE 1 = 1
-                  AND event_date
-                    BETWEEN UTC_TIMESTAMP() + INTERVAL 6 HOUR
-                    AND UTC_TIMESTAMP() + INTERVAL 10 HOUR
-                AND e.league_name LIKE :league_name
-                ORDER BY event_date
+                         LEFT JOIN odds o ON e.event_id = o.event_id
+                WHERE e.event_date BETWEEN
+                    CASE
+                        WHEN :range_type = 'full'
+                            THEN CONVERT_TZ(CURDATE(), '+00:00', '+07:00')
+                        ELSE UTC_TIMESTAMP() + INTERVAL 7 HOUR
+                        END
+                    AND
+                    CASE
+                        WHEN :range_type = 'full'
+                            THEN CONVERT_TZ(CURDATE() + INTERVAL 1 DAY, '+00:00', '+07:00')
+                        ELSE UTC_TIMESTAMP() + INTERVAL (7 + 4) HOUR
+                        END
+                   AND e.league_name LIKE :league_name
+                ORDER BY e.event_date
                 """;
         var param = new MapSqlParameterSource()
+                .addValue("range_type", rangeType)
                 .addValue("league_name", "%" + leagueName + "%");
         return jdbcTemplate.query(sql, param, (rs, i) -> new EventDTO(rs))
                            .stream()
@@ -59,12 +72,13 @@ public class MainController {
                            .entrySet()
                            .stream()
                            .map(EventResult::new)
-                           .map(EventResult::toResult)
+                           .sorted(Comparator.comparing(EventResult::getEventDate))
+                           .map(it -> it.toResult(showOdd))
                            .collect(Collectors.joining("\n"));
     }
 
     @GetMapping(value = "test", produces = MediaType.TEXT_PLAIN_VALUE)
-    public Object test() throws IOException {
+    public Object test(@RequestParam("date") String date) throws IOException {
         var result = new ArrayList<EventHtml>();
         try (var playwright = Playwright.create()) {
             var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
@@ -76,28 +90,31 @@ public class MainController {
                             .setIgnoreHTTPSErrors(true));
 
             var page = context.newPage();
-            page.navigate("https://www.aiscore.com/%s".formatted(DateUtil.getTomorrowDate()));
+            page.navigate("https://www.aiscore.com/%s".formatted(date));
             page.click("span.changeItem:has-text(\"Scheduled\")");
             page.click("span.sortByText:has-text(\"Sort by time\")");
 
             int previousHeight = 0;
             int currentHeight;
-            int maxTries = 100;
+            int maxTries = 200;
             int scrollStep = 800;
             int tries = 0;
 
             while (tries < maxTries) {
+                System.out.println("Crawl time: " + tries + ", number of events: " + result.size());
+
                 // Phân tích nội dung mới
                 var pageSource = page.content();
                 var doc = Jsoup.parse(pageSource, "https://www.aiscore.com/");
 
-                getEvent(doc).forEach(e -> result.stream()
-                                                 .filter(it -> it.getEventName().equals(e.getEventName()))
-                                                 .findFirst()
-                                                 .ifPresentOrElse(
-                                                         it -> System.out.println("Số lượng: " + result.size()),
-                                                         () -> result.add(e)
-                                                 ));
+                getEvent(doc, date).forEach(e -> result.stream()
+                                                       .filter(it -> it.getEventName().equals(e.getEventName()))
+                                                       .findFirst()
+                                                       .ifPresentOrElse(
+                                                               it -> {
+                                                               },
+                                                               () -> result.add(e)
+                                                       ));
 
                 currentHeight = ((Number) page.evaluate("() => document.body.scrollHeight")).intValue();
 
@@ -105,7 +122,7 @@ public class MainController {
                     break; // Không còn phần tử mới load
                 }
                 page.evaluate("window.scrollBy(0, %d)".formatted(scrollStep));
-                page.waitForTimeout(1000); // Đợi nội dung mới load (1s)
+                page.waitForTimeout(3000); // Đợi nội dung mới load (1s)
                 previousHeight += scrollStep;
                 tries++;
             }
@@ -134,7 +151,7 @@ public class MainController {
         }
     }
 
-    private List<EventHtml> getEvent(Document doc) {
+    private List<EventHtml> getEvent(Document doc, String date) {
         return doc.select(".vue-recycle-scroller__item-view")
                   .stream()
                   .map(l -> {
@@ -142,7 +159,10 @@ public class MainController {
                               l.select(".country-name").text(),
                               l.select(".compe-name").text()
                       );
-                      return l.select("a.match-container").stream().map(e -> new EventHtml(e, leagueName)).toList();
+                      return l.select("a.match-container")
+                              .stream()
+                              .map(e -> new EventHtml(e, leagueName, date))
+                              .toList();
                   })
                   .flatMap(Collection::stream)
                   .toList();
@@ -153,20 +173,20 @@ public class MainController {
         crawlOdd();
     }
 
-    @Scheduled(fixedRate = 2 * 60 * 1000)
+//    @Scheduled(fixedRate = 2 * 60 * 1000)
     public void crawlOdd() {
         // process 20 events every 2 minutes
-        log.info("Start crawl odd begin: " + new Date());
         var sql = """
                 SELECT event_id, event_name, event_date, league_name, detail_link
                 FROM events
                 WHERE 1 = 1
-                  AND event_date BETWEEN UTC_TIMESTAMP() + INTERVAL 7 HOUR AND UTC_TIMESTAMP() + INTERVAL 11 HOUR
+                  AND event_date BETWEEN UTC_TIMESTAMP() + INTERVAL 8 HOUR AND UTC_TIMESTAMP() + INTERVAL 11 HOUR
                   AND is_crawl_odds = 'N'
                 LIMIT 20
                 """;
         var events = jdbcTemplate.query(sql, (rs, i) -> new Event(rs));
         if (!CollectionUtils.isEmpty(events)) {
+            log.info("Start crawl odd begin: " + new Date());
             var odds = events.stream()
                              .map(it -> {
                                  var bet = getBet(it.getDetailLink());
@@ -219,7 +239,7 @@ public class MainController {
 
             var page = context.newPage();
             page.navigate(url);
-            page.waitForTimeout(1_500);
+            page.waitForTimeout(2_500);
             var lookBoxes = page.querySelectorAll(".lookBox");
 
             if (lookBoxes.size() >= 2) {

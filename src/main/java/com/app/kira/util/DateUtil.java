@@ -10,8 +10,17 @@ import java.util.Locale;
 @UtilityClass
 public class DateUtil {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("h:mm a dd-MM-yyyy");
+    private static final DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd");
     private static final DateTimeFormatter ODD_DATE_FORMATTER =
             DateTimeFormatter.ofPattern("h:mm a EEEE, MMM d, yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    private static final DateTimeFormatter FORMATTER2 = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public static String convertFormater1ToFormater2(String date) {
+        LocalDate localDate = LocalDate.parse(date, FORMATTER1);
+        return localDate.format(FORMATTER2);
+    }
 
     public static String getTodayDate() {
         return getTodayDate("yyyyMMdd");
@@ -32,7 +41,11 @@ public class DateUtil {
     }
 
     public LocalDateTime parseDate(String date) {
-        return LocalDateTime.parse(date, formatter);
+        try {
+            return LocalDateTime.parse(date, formatter);
+        } catch (Exception e) {
+            return LocalDateTime.parse(date, formatter2);
+        }
     }
 
     public LocalDateTime parseOddDate(String oddDate) {

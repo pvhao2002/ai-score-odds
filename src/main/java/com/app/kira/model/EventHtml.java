@@ -20,12 +20,12 @@ public class EventHtml {
     private String leagueName;
     private String detailLink;
 
-    public EventHtml(Element ele, String leagueName) {
+    public EventHtml(Element ele, String leagueName, String date) {
         this.leagueName = leagueName;
         this.homeName = ele.select("[itemprop=homeTeam]").text();
         this.awayName = ele.select("[itemprop=awayTeam]").text();
         this.eventName = "%s v %s".formatted(this.homeName, this.awayName);
-        this.time = ele.select(".time").text().concat(" %s".formatted(DateUtil.getTomorrowDate("dd-MM-yyyy")));
+        this.time = ele.select(".time").text().concat(" %s".formatted(DateUtil.convertFormater1ToFormater2(date)));
         this.detailLink = ele.absUrl("href").replace("h2h", "odds");
     }
 
