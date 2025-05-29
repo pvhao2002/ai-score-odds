@@ -3,26 +3,50 @@ package com.app.kira.rest;
 import com.app.kira.model.*;
 import com.app.kira.util.DateUtil;
 import com.google.gson.Gson;
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Playwright;
+import com.lowagie.text.Image;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.pdf.PdfWriter;
+import com.microsoft.playwright.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.IOException;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Log
@@ -173,7 +197,7 @@ public class MainController {
         crawlOdd();
     }
 
-//    @Scheduled(fixedRate = 2 * 60 * 1000)
+    //    @Scheduled(fixedRate = 2 * 60 * 1000)
     public void crawlOdd() {
         // process 20 events every 2 minutes
         var sql = """
@@ -308,6 +332,93 @@ public class MainController {
         return bet.build();
     }
 
+    @GetMapping("/generate-pdf")
+    public Object generatePdf(@RequestParam String url) throws Exception {
+        List<String> imageLinks = new CopyOnWriteArrayList<>();
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+            BrowserContext context = browser.newContext();
+            Page page = context.newPage();
+
+            // Lắng nghe network request
+            page.onRequestFinished(request -> {
+                String u = request.url();
+                if (u.startsWith("https://drive.google.com/viewerng/img")) {
+                    System.out.println("Found image link: " + u);
+                    imageLinks.add(u);
+                }
+            });
+
+            // Mở trang
+            page.navigate(url);
+            page.waitForTimeout(3000);
+
+            for (int i = 0; i < 430; i++) {
+                if (imageLinks.size() == 192) {
+                    break; // Dừng nếu đã đủ 192 ảnh
+                }
+                System.out.println("Crawl time: " + i + ", number of images: " + imageLinks.size());
+                page.evaluate("""
+                                      () => {
+                                          const scroller = document.querySelector('.ndfHFb-c4YZDc-cYSp0e-s2gQvd, .ndfHFb-c4YZDc-s2gQvd, .ndfHFb-c4YZDc-s2gQvd-sn54Q') || document.scrollingElement;
+                                          if (scroller) {
+                                              scroller.scrollBy(0, 800);
+                                          }
+                                      }
+                                      """);
+                page.waitForTimeout(300);
+            }
+            System.out.println("Số ảnh tìm thấy: " + imageLinks.size());
+            // Đóng trình duyệt
+            browser.close();
+        }
+        // Sắp xếp theo param page
+        List<String> sortedLinks = imageLinks.stream()
+                                             .sorted(Comparator.comparingInt(link -> {
+                                                 Matcher matcher = Pattern.compile("[?&]page=(\\d+)").matcher(link);
+                                                 return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+                                             }))
+                                             .toList();
+        System.out.println("Số ảnh sau khi sắp xếp: " + sortedLinks.size());
+        ImageIO.scanForPlugins();
+        // Tạo PDF
+        String outputPath = "images_output.pdf";
+        try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+            com.lowagie.text.Document document = new com.lowagie.text.Document();
+            PdfWriter.getInstance(document, fos);
+            document.open();
+
+            for (String imgUrl : sortedLinks) {
+                try (InputStream in = new URL(imgUrl).openStream()) {
+                    BufferedImage img = ImageIO.read(in);
+                    if (img != null) {
+                        byte[] compressedBytes = compressJpeg(img, 0.5f); // 50% quality
+                        Image pdfImg = Image.getInstance(compressedBytes);
+                        pdfImg.scaleToFit(PageSize.A4.getWidth(), PageSize.A4.getHeight());
+                        pdfImg.setAlignment(Image.ALIGN_CENTER);
+                        document.add(pdfImg);
+                        document.newPage();
+                    } else{
+                        System.err.println("Image is null: " + imgUrl);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Failed to load image: " + imgUrl);
+                }
+            }
+
+            document.close();
+        }
+
+        // Trả về file
+        File file = new File(outputPath);
+        InputStreamResource resource = new InputStreamResource(new FileInputStream(file));
+        return ResponseEntity.ok()
+                             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + file.getName())
+                             .contentType(MediaType.APPLICATION_PDF)
+                             .contentLength(file.length())
+                             .body(resource);
+    }
+
     private <T extends BaseOdd> List<T> parseOdds(Document doc, Function<List<Element>, T> rowMapper) {
         return doc.select("table.el-table__body")
                   .select("tr.el-table__row")
@@ -321,5 +432,34 @@ public class MainController {
                   .toList();
     }
 
+    public  byte[] compressJpeg(BufferedImage image, float quality) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();
+        ImageWriteParam jpgWriteParam = jpgWriter.getDefaultWriteParam();
+        jpgWriteParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        jpgWriteParam.setCompressionQuality(quality); // từ 0.0 (thấp nhất) đến 1.0 (cao nhất)
+
+        ImageOutputStream ios = ImageIO.createImageOutputStream(baos);
+        jpgWriter.setOutput(ios);
+        jpgWriter.write(null, new IIOImage(image, null, null), jpgWriteParam);
+
+        jpgWriter.dispose();
+        return baos.toByteArray();
+    }
+    public static void main(String[] args) throws MalformedURLException {
+
+        var url = new URL(URLDecoder.decode("https://drive.google.com/viewerng/img?id=ACFrOgDjR3pV7OLyklHDCWz560WnLRZsZUnqUGVvcb_stGolBvQGiNITE1l3kgtBZqNpjXJUqQ7w6gj4oCbSKSaf4p_5Rs1D9t8KFU4jYIsFvOvAym9n2wxH4eyY8YMoX-XeeNK60Krm1_E_egkzCDltj4Maz5-nzpGGWaKQlkM6dVYioahV70euqOPjBH2neaXGrVfBgzDXch4Ad-LefOoUGbSiDdsf20WStN0ozarkOGAbD32BPR35OGKE9PE%3D&page=10&skiphighlight=true&w=1600&webp=true", StandardCharsets.UTF_8));
+        try (var in = url.openStream()) {
+            BufferedImage img = ImageIO.read(in);
+            if (img != null) {
+                System.out.println("Image loaded successfully: " + img.getWidth() + "x" + img.getHeight());
+            } else{
+                System.err.println("Image is null");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
 }
