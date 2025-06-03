@@ -9,11 +9,6 @@ import com.lowagie.text.pdf.PdfWriter;
 import com.microsoft.playwright.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -39,11 +34,11 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -197,46 +192,97 @@ public class MainController {
         crawlOdd();
     }
 
+    @GetMapping("league")
+    public Object getLeagues(@RequestParam(value = "day",defaultValue = "today") String day) {
+        var sql = """
+                select league_name, MIN(event_date) AS event_date
+                from events
+                WHERE event_date BETWEEN
+                          CASE
+                              WHEN :day = 'today' THEN CONCAT(CURDATE(), ' 00:00:00')
+                              WHEN :day = 'tomorrow' THEN CONCAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), ' 00:00:00')
+                              END
+                          AND
+                          CASE
+                              WHEN :day = 'today' THEN CONCAT(CURDATE(), ' 23:59:59')
+                              WHEN :day = 'tomorrow' THEN CONCAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), ' 23:59:59')
+                              END
+                GROUP BY league_name
+                HAVING event_date > DATE_ADD(NOW(), INTERVAL 7 HOUR)
+                ORDER BY event_date
+                """;
+        var param = new MapSqlParameterSource()
+                .addValue("day", day);
+        return jdbcTemplate.query(sql, param, (rs,i)-> new String[]{rs.getString("league_name"), rs.getString("event_date")});
+    }
+
     //    @Scheduled(fixedRate = 2 * 60 * 1000)
+    @GetMapping("odd")
     public void crawlOdd() {
         // process 20 events every 2 minutes
         var sql = """
-                SELECT event_id, event_name, event_date, league_name, detail_link
-                FROM events
-                WHERE 1 = 1
-                  AND event_date BETWEEN UTC_TIMESTAMP() + INTERVAL 8 HOUR AND UTC_TIMESTAMP() + INTERVAL 11 HOUR
-                  AND is_crawl_odds = 'N'
-                LIMIT 20
+                select event_id, event_name, event_date, league_name, detail_link
+                from events
+                where event_date between DATE_ADD(NOW(), INTERVAL 7 HOUR) and CONCAT(CURDATE(), ' 23:59:59')
+                order by event_date
                 """;
         var events = jdbcTemplate.query(sql, (rs, i) -> new Event(rs));
         if (!CollectionUtils.isEmpty(events)) {
             log.info("Start crawl odd begin: " + new Date());
-            var odds = events.stream()
-                             .map(it -> {
-                                 var bet = getBet(it.getDetailLink());
-                                 var param1x2 = new MapSqlParameterSource()
-                                         .addValue("event_id", it.getEventId())
-                                         .addValue("odd_value", gson.toJson(bet.getOdds1x2()))
-                                         .addValue("odd_type", "1x2");
-                                 var paramHandicap = new MapSqlParameterSource()
-                                         .addValue("event_id", it.getEventId())
-                                         .addValue("odd_value", gson.toJson(bet.getOddsHandicap()))
-                                         .addValue("odd_type", "handicap");
-                                 var paramGoal = new MapSqlParameterSource()
-                                         .addValue("event_id", it.getEventId())
-                                         .addValue("odd_value", gson.toJson(bet.getOddsGoal()))
-                                         .addValue("odd_type", "goals");
-                                 var paramCorner = new MapSqlParameterSource()
-                                         .addValue("event_id", it.getEventId())
-                                         .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
-                                         .addValue("odd_type", "corners");
-                                 return List.of(param1x2, paramHandicap, paramGoal, paramCorner);
-                             })
-                             .flatMap(Collection::stream)
-                             .toList()
-                             .toArray(new MapSqlParameterSource[0]);
+            int batchSize = 20;
+            int numThreads = (events.size() + batchSize - 1) / batchSize;
+            ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+
+            List<CompletableFuture<List<MapSqlParameterSource>>> futures = new ArrayList<>();
+
+            for (int i = 0; i < events.size(); i += batchSize) {
+                int toIndex = Math.min(i + batchSize, events.size());
+                List<Event> subList = events.subList(i, toIndex);
+
+                CompletableFuture<List<MapSqlParameterSource>> future = CompletableFuture.supplyAsync(() -> {
+                    List<MapSqlParameterSource> result = new ArrayList<>();
+                    for (Event it : subList) {
+                        log.info("Crawl odd for event: " + it.getEventName() + " - " + it.getEventDate());
+                        var bet = getBet(it.getDetailLink());
+
+                        result.add(new MapSqlParameterSource()
+                                           .addValue("event_id", it.getEventId())
+                                           .addValue("odd_value", gson.toJson(bet.getOdds1x2()))
+                                           .addValue("odd_type", "1x2"));
+
+                        result.add(new MapSqlParameterSource()
+                                           .addValue("event_id", it.getEventId())
+                                           .addValue("odd_value", gson.toJson(bet.getOddsHandicap()))
+                                           .addValue("odd_type", "handicap"));
+
+                        result.add(new MapSqlParameterSource()
+                                           .addValue("event_id", it.getEventId())
+                                           .addValue("odd_value", gson.toJson(bet.getOddsGoal()))
+                                           .addValue("odd_type", "goals"));
+
+                        result.add(new MapSqlParameterSource()
+                                           .addValue("event_id", it.getEventId())
+                                           .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
+                                           .addValue("odd_type", "corners"));
+                    }
+                    return result;
+                }, executor);
+
+                futures.add(future);
+            }
+
+            // Đợi tất cả các luồng hoàn tất
+            List<MapSqlParameterSource> allParams = futures.stream()
+                                                           .map(CompletableFuture::join)
+                                                           .flatMap(List::stream)
+                                                           .toList();
+            executor.shutdown();
+            System.out.println("Total odd params: " + allParams.size());
+            // Nếu bạn cần array
+            MapSqlParameterSource[] paramsArray = allParams.toArray(new MapSqlParameterSource[0]);
+
             var sqlInsert = "insert into odds(odd_type, odd_value, event_id) values (:odd_type, :odd_value, :event_id)";
-            jdbcTemplate.batchUpdate(sqlInsert, odds);
+            jdbcTemplate.batchUpdate(sqlInsert, paramsArray);
             var sqlUpdate = "update events set is_crawl_odds = 'Y' where event_id = :event_id";
             var params = events.stream()
                                .map(it -> new MapSqlParameterSource()

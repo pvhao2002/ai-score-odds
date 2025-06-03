@@ -5,6 +5,7 @@ import lombok.experimental.UtilityClass;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 
 @UtilityClass
@@ -13,6 +14,9 @@ public class DateUtil {
     private static final DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd");
     private static final DateTimeFormatter ODD_DATE_FORMATTER =
             DateTimeFormatter.ofPattern("h:mm a EEEE, MMM d, yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter ODD_DATE_FORMATTER1 =
+            DateTimeFormatter.ofPattern("h:mm a EEEE, MMMM d, yyyy", Locale.ENGLISH);
+
     private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private static final DateTimeFormatter FORMATTER2 = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -48,8 +52,20 @@ public class DateUtil {
         }
     }
 
+    private static final List<DateTimeFormatter> FORMATTERS = List.of(
+            DateTimeFormatter.ofPattern("h:mm a EEEE, MMMM d, yyyy", Locale.ENGLISH),
+            DateTimeFormatter.ofPattern("h:mm a EEE, MMM d, yyyy", Locale.ENGLISH)
+    );
+
     public LocalDateTime parseOddDate(String oddDate) {
-        return LocalDateTime.parse(oddDate, ODD_DATE_FORMATTER);
+        for (DateTimeFormatter formatter : FORMATTERS) {
+            try {
+                return LocalDateTime.parse(oddDate, formatter);
+            } catch (Exception ignored) {
+            }
+        }
+        return LocalDateTime.now();
     }
+
 }
 

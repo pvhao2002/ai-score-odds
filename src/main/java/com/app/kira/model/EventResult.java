@@ -62,45 +62,66 @@ public class EventResult {
         var result = new StringBuilder();
         result.append(
                 """
-                        Hãy phân tích và nhận định kèo trận đấu bóng đá giữa %s, diễn ra vào %s tại giải %s.
+                        Please provide a comprehensive and intelligent betting analysis for the football match between [%s] in league [%s], scheduled on [%s].
                                                 
-                        Dựa trên các yếu tố sau, vui lòng cung cấp một phân tích chuyên sâu và lựa chọn kèo cược an toàn nhất:
+                        I will provide you with the following betting odds data:
                                                 
-                        Mục tiêu thi đấu của hai đội trong bối cảnh giải đấu hiện tại (ví dụ: tranh suất trụ hạng, cạnh tranh vô địch, đã hết động lực, v.v.).
+                        - 1X2 (Match result odds)
                                                 
-                        Phong độ 5 trận gần nhất của mỗi đội (trong mọi đấu trường hoặc riêng tại giải đấu).
+                        - Asian Handicap odds
                                                 
-                        Lịch sử đối đầu gần đây (H2H – Head-to-head).
+                        - Over/Under Goals odds
                                                 
-                        Đội hình ra sân dự kiến, bao gồm các chấn thương, treo giò hoặc thiếu vắng đáng chú ý.
+                        - Corner betting odds (if available)
                                                 
-                        Phân tích chiến thuật và lối chơi của cả hai đội.
+                        In addition to the standard match analysis, please use artificial intelligence to interpret and factor in odds movement and potential sharp money patterns to refine predictions.
                                                 
-                        Sau đó, hãy đưa ra nhận định cụ thể cho từng loại kèo sau:
+                        Specifically:
                                                 
-                        Kèo châu Á (Handicap)
+                        - Consider pre-match motivation and goals of each team based on tournament/league context.
                                                 
-                        Kèo tài xỉu (Over/Under)
+                        - Analyze the last 5-match form, including home/away performance and goal trends.
                                                 
-                        Kèo phạt góc (Corner)
+                        - Include recent head-to-head record.
                                                 
-                        Kèo thẻ phạt (Cards)
+                        - Account for injuries, suspensions, and expected line-ups.
                                                 
-                        Cuối cùng, dự đoán tỷ số chính xác và nêu rõ lựa chọn kèo có xác suất thắng cao nhất, kèm lý do ngắn gọn.
+                        - Examine tactical styles of both teams and their compatibility against each other.
+                                                
+                        - Use the provided odds to detect any unusual shifts, suspicious movements, or value betting angles.
+                                                
+                        Provide a breakdown of recommendations for:
+                                                
+                        - Asian Handicap
+                                                
+                        - Over/Under Goals
+                                                
+                        - 1X2 (Match Winner)
+                                                
+                        - Corner Bet
+                                                
+                        - Card Bet (if applicable)
+                                                
+                        Finish with:
+                                                
+                        - Exact score prediction
+                                                
+                        - Most reliable/safe betting option
+                                                
+                        - Any value or contrarian betting insights based on odds movement analysis
                         \n
-                                """.formatted(getEventName(), getEventDate().toString(), getLeagueName()));
+                                        """.formatted(getEventName(), getLeagueName(), getEventDate().toString()));
         Optional.ofNullable(showOdd)
                 .filter(show -> show)
                 .ifPresent(show -> {
                     // Helper line
-                    String line1x2 = "+" + "-".repeat(42) + "+" + "-".repeat(17) + "+" + "-".repeat(17) + "+" + "-".repeat(
-                            17) + "+\n";
-                    String lineHandicap = "+" + "-".repeat(42) + "+" + "-".repeat(17) + "+" + "-".repeat(17) + "+\n";
+                    String line1x2 = "|" + "-".repeat(42) + "|" + "-".repeat(17) + "|" + "-".repeat(17) + "|" + "-".repeat(
+                            17) + "|\n";
+                    String lineHandicap = "|" + "-".repeat(42) + "|" + "-".repeat(17) + "|" + "-".repeat(17) + "|\n";
 
                     if (!CollectionUtils.isEmpty(odds1x2)) {
                         // Odds 1x2
                         result.append("Odds 1x2:\n");
-                        result.append(line1x2);
                         result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n", "Date", "1", "X", "2"));
                         result.append(line1x2);
                         for (Odd1x2 odd : odds1x2) {
@@ -108,13 +129,12 @@ public class EventResult {
                                                         odd.getOddDate(), odd.get_1(), odd.getX(), odd.get_2()
                             ));
                         }
-                        result.append(line1x2).append("\n");
+                        result.append("\n");
                     }
 
                     if (!CollectionUtils.isEmpty(oddsGoal)) {
                         // Odds Goal
                         result.append("Odds Goal:\n");
-                        result.append(line1x2);
                         result.append(String.format(
                                 "| %-40s | %-15s | %-15s | %-15s |\n",
                                 "Date",
@@ -128,13 +148,12 @@ public class EventResult {
                                                         odd.getOddDate(), odd.getGoals(), odd.getOver(), odd.getUnder()
                             ));
                         }
-                        result.append(line1x2).append("\n");
+                        result.append("\n");
                     }
 
                     if (!CollectionUtils.isEmpty(oddsHandicap)) {
                         // Odds Handicap
                         result.append("Odds Handicap:\n");
-                        result.append(lineHandicap);
                         result.append(String.format("| %-40s | %-15s | %-15s |\n", "Date", "Home", "Away"));
                         result.append(lineHandicap);
                         for (OddHandicap odd : oddsHandicap) {
@@ -142,13 +161,12 @@ public class EventResult {
                                                         odd.getOddDate(), odd.getHome(), odd.getAway()
                             ));
                         }
-                        result.append(lineHandicap).append("\n");
+                        result.append("\n");
                     }
 
                     if (!CollectionUtils.isEmpty(oddsCorner)) {
                         // Odds Corner
                         result.append("Odds Corner:\n");
-                        result.append(line1x2);
                         result.append(String.format(
                                 "| %-40s | %-15s | %-15s | %-15s |\n",
                                 "Date",
@@ -162,7 +180,6 @@ public class EventResult {
                                                         odd.getOddDate(), odd.getCorner(), odd.getOver(), odd.getUnder()
                             ));
                         }
-                        result.append(line1x2);
                     }
                 });
         return result.toString();

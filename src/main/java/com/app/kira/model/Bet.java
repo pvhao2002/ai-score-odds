@@ -39,12 +39,11 @@ public class Bet {
         result.append("Event Date: ").append(eventDate).append("\n\n");
 
         // Helper line
-        String line1x2 = "+" + "-".repeat(42) + "+" + "-".repeat(17) + "+" + "-".repeat(17) + "+" + "-".repeat(17) + "+\n";
-        String lineHandicap = "+" + "-".repeat(42) + "+" + "-".repeat(17) + "+" + "-".repeat(17) + "+\n";
+        String line1x2 = "|" + "-".repeat(42) + "|" + "-".repeat(17) + "|" + "-".repeat(17) + "|" + "-".repeat(17) + "|\n";
+        String lineHandicap = "|" + "-".repeat(42) + "|" + "-".repeat(17) + "|" + "-".repeat(17) + "|\n";
 
         // Odds 1x2
         result.append("Odds 1x2:\n");
-        result.append(line1x2);
         result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n", "Date", "1", "X", "2"));
         result.append(line1x2);
         for (Odd1x2 odd : odds1x2) {
@@ -55,7 +54,6 @@ public class Bet {
 
         // Odds Goal
         result.append("Odds Goal:\n");
-        result.append(line1x2);
         result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n", "Date", "Goals", "Over", "Under"));
         result.append(line1x2);
         for (OddGoal odd : oddsGoal) {
@@ -66,7 +64,6 @@ public class Bet {
 
         // Odds Handicap
         result.append("Odds Handicap:\n");
-        result.append(lineHandicap);
         result.append(String.format("| %-40s | %-15s | %-15s |\n", "Date", "Home", "Away"));
         result.append(lineHandicap);
         for (OddHandicap odd : oddsHandicap) {
@@ -77,7 +74,6 @@ public class Bet {
 
         // Odds Corner
         result.append("Odds Corner:\n");
-        result.append(line1x2);
         result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n", "Date", "Corner", "Over", "Under"));
         result.append(line1x2);
         for (OddCorner odd : oddsCorner) {
