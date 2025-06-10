@@ -122,28 +122,28 @@ public class AnalystController {
                 var pageSource = page.content();
                 var doc = Jsoup.parse(pageSource, "https://www.aiscore.com/");
                 var events = doc.select(".vue-recycle-scroller__item-view")
-                                .stream()
-                                .map(l -> {
-                                    var leagueName = "%s %s".formatted(
-                                            l.select(".country-name").text(),
-                                            l.select(".compe-name").text()
-                                    );
-                                    return l.select("a.match-container")
-                                            .stream()
-                                            .map(e -> new EventHtml(e, leagueName, date))
-                                            .toList();
-                                })
-                                .flatMap(Collection::stream)
-                                .filter(e -> result.stream()
-                                                   .filter(it -> it.getEventName().equalsIgnoreCase(e.getEventName())
-                                                                 &&
-                                                                 it.getLeagueName().equalsIgnoreCase(e.getLeagueName())
-                                                                 &&
-                                                                 it.getTime().equalsIgnoreCase(e.getTime())
-                                                   )
-                                                   .findFirst()
-                                                   .isEmpty())
-                                .toList();
+                        .stream()
+                        .map(l -> {
+                            var leagueName = "%s %s".formatted(
+                                    l.select(".country-name").text(),
+                                    l.select(".compe-name").text()
+                            );
+                            return l.select("a.match-container")
+                                    .stream()
+                                    .map(e -> new EventHtml(e, leagueName, date))
+                                    .toList();
+                        })
+                        .flatMap(Collection::stream)
+                        .filter(e -> result.stream()
+                                .filter(it -> it.getEventName().equalsIgnoreCase(e.getEventName())
+                                        &&
+                                        it.getLeagueName().equalsIgnoreCase(e.getLeagueName())
+                                        &&
+                                        it.getTime().equalsIgnoreCase(e.getTime())
+                                )
+                                .findFirst()
+                                .isEmpty())
+                        .toList();
                 result.addAll(events);
                 currentHeight = ((Number) page.evaluate("() => document.body.scrollHeight")).intValue();
 
@@ -156,8 +156,8 @@ public class AnalystController {
                 tries++;
             }
             var params = result.stream()
-                               .map(EventHtml::toMap)
-                               .toArray(SqlParameterSource[]::new);
+                    .map(EventHtml::toMap)
+                    .toArray(SqlParameterSource[]::new);
             jdbcTemplate.batchUpdate(
                     """
                             INSERT INTO event_crawl(event_name, event_date, detail_link)
@@ -169,48 +169,48 @@ public class AnalystController {
                     params
             );
             jdbcTemplate.batchUpdate("""
-                                             insert into event_analyst(event_name
-                                             , home_team
-                                             , away_team
-                                             , league_name
-                                             , event_date
-                                             , ht_home_score
-                                             , ht_away_score
-                                             , ft_home_score
-                                             , ft_away_score
-                                             , ht_score_str
-                                             , ft_score_str
-                                             , home_corner
-                                             , away_corner
-                                             , corner_str)
-                                             values (:event_name
-                                             , :home_team
-                                             , :away_team
-                                             , :league_name
-                                             , :event_date
-                                             , :ht_home_score
-                                             , :ht_away_score
-                                             , :ft_home_score
-                                             , :ft_away_score
-                                             , :ht_score_str
-                                             , :ft_score_str
-                                             , :home_corner
-                                             , :away_corner
-                                             , :corner_str)
-                                             on duplicate key update
-                                                 home_team = values(home_team),
-                                                 away_team = values(away_team),
-                                                 league_name = values(league_name),
-                                                 ht_home_score = values(ht_home_score),
-                                                 ht_away_score = values(ht_away_score),
-                                                 ft_home_score = values(ft_home_score),
-                                                 ft_away_score = values(ft_away_score),
-                                                 ht_score_str = values(ht_score_str),
-                                                 ft_score_str = values(ft_score_str),
-                                                 home_corner = values(home_corner),
-                                                 away_corner = values(away_corner),
-                                                 corner_str = values(corner_str)
-                                                                             """, params);
+                    insert into event_analyst(event_name
+                    , home_team
+                    , away_team
+                    , league_name
+                    , event_date
+                    , ht_home_score
+                    , ht_away_score
+                    , ft_home_score
+                    , ft_away_score
+                    , ht_score_str
+                    , ft_score_str
+                    , home_corner
+                    , away_corner
+                    , corner_str)
+                    values (:event_name
+                    , :home_team
+                    , :away_team
+                    , :league_name
+                    , :event_date
+                    , :ht_home_score
+                    , :ht_away_score
+                    , :ft_home_score
+                    , :ft_away_score
+                    , :ht_score_str
+                    , :ft_score_str
+                    , :home_corner
+                    , :away_corner
+                    , :corner_str)
+                    on duplicate key update
+                        home_team = values(home_team),
+                        away_team = values(away_team),
+                        league_name = values(league_name),
+                        ht_home_score = values(ht_home_score),
+                        ht_away_score = values(ht_away_score),
+                        ft_home_score = values(ft_home_score),
+                        ft_away_score = values(ft_away_score),
+                        ht_score_str = values(ht_score_str),
+                        ft_score_str = values(ft_score_str),
+                        home_corner = values(home_corner),
+                        away_corner = values(away_corner),
+                        corner_str = values(corner_str)
+                                                    """, params);
             browser.close();
         } catch (Exception ex) {
             log.log(Level.WARNING, "Error during analystDate", ex);
@@ -218,10 +218,10 @@ public class AnalystController {
         } finally {
             log.info("Crawl analystDate for date: " + date + " done at " + new Date());
             jdbcTemplate.update("""
-                                        delete
-                                        from crawl_date
-                                        where date = :date and status = 'in_progress'
-                                        """, paramsDate);
+                    delete
+                    from crawl_date
+                    where date = :date and status = 'in_progress'
+                    """, paramsDate);
         }
     }
 
@@ -265,8 +265,7 @@ public class AnalystController {
         return "OK";
     }
 
-//    @Scheduled(fixedDelay =  1000, initialDelay = 10_000)
-    @Transactional
+    @Scheduled(fixedDelay = 1000, initialDelay = 10_000)
     public void event() {
         var sqlEvents = """
                 select id,
@@ -312,7 +311,7 @@ public class AnalystController {
 
                     try (var playwright = Playwright.create()) {
                         var browser = playwright.chromium()
-                                                .launch(new BrowserType.LaunchOptions().setHeadless(true));
+                                .launch(new BrowserType.LaunchOptions().setHeadless(true));
                         var context = browser.newContext(
                                 new Browser
                                         .NewContextOptions()
@@ -346,7 +345,7 @@ public class AnalystController {
                                 ));
 
                                 bet = bet.odds1x2(odd1x2)
-                                         .oddsHandicap(oddHandicap);
+                                        .oddsHandicap(oddHandicap);
 
                                 oddButton.get(2).click();
                                 page.waitForTimeout(1000);
@@ -372,37 +371,37 @@ public class AnalystController {
                             }
                             var resultBet = bet.build();
                             result.add(new MapSqlParameterSource()
-                                               .addValue("event_name", it.getEventName())
-                                               .addValue("event_date", it.getTime())
-                                               .addValue("odd_value", gson.toJson(resultBet.getOdds1x2()))
-                                               .addValue("odd_type", "1x2"));
+                                    .addValue("event_name", it.getEventName())
+                                    .addValue("event_date", it.getTime())
+                                    .addValue("odd_value", gson.toJson(resultBet.getOdds1x2()))
+                                    .addValue("odd_type", "1x2"));
 
                             result.add(new MapSqlParameterSource()
-                                               .addValue("event_name", it.getEventName())
-                                               .addValue("event_date", it.getTime())
-                                               .addValue("odd_value", gson.toJson(resultBet.getOddsHandicap()))
-                                               .addValue("odd_type", "hdc"));
+                                    .addValue("event_name", it.getEventName())
+                                    .addValue("event_date", it.getTime())
+                                    .addValue("odd_value", gson.toJson(resultBet.getOddsHandicap()))
+                                    .addValue("odd_type", "hdc"));
 
                             result.add(new MapSqlParameterSource()
-                                               .addValue("event_name", it.getEventName())
-                                               .addValue("event_date", it.getTime())
-                                               .addValue("odd_value", gson.toJson(resultBet.getOddsGoal()))
-                                               .addValue("odd_type", "ou"));
+                                    .addValue("event_name", it.getEventName())
+                                    .addValue("event_date", it.getTime())
+                                    .addValue("odd_value", gson.toJson(resultBet.getOddsGoal()))
+                                    .addValue("odd_type", "ou"));
 
                             result.add(new MapSqlParameterSource()
-                                               .addValue("event_name", it.getEventName())
-                                               .addValue("event_date", it.getTime())
-                                               .addValue("odd_value", gson.toJson(resultBet.getOddsCorner()))
-                                               .addValue("odd_type", "corner"));
+                                    .addValue("event_name", it.getEventName())
+                                    .addValue("event_date", it.getTime())
+                                    .addValue("odd_value", gson.toJson(resultBet.getOddsCorner()))
+                                    .addValue("odd_type", "corner"));
                             var sqlInsert = """
-                                insert into odd_analyst(event_id, odd_type, odd_value)
-                                                          SELECT e.id, :odd_type, :odd_value
-                                                          FROM event_analyst e
-                                                          WHERE TRUE
-                                                            AND e.event_name = :event_name
-                                                            AND e.event_date = :event_date
-                                                          ON DUPLICATE KEY UPDATE odd_value = :odd_value
-                                """;
+                                    insert into odd_analyst(event_id, odd_type, odd_value)
+                                                              SELECT e.id, :odd_type, :odd_value
+                                                              FROM event_analyst e
+                                                              WHERE TRUE
+                                                                AND e.event_name = :event_name
+                                                                AND e.event_date = :event_date
+                                                              ON DUPLICATE KEY UPDATE odd_value = :odd_value
+                                    """;
                             jdbcTemplate.batchUpdate(sqlInsert, result.toArray(new MapSqlParameterSource[0]));
                             times++;
                             log.log(Level.INFO, "Crawl odd for event (%d/%d) of index(%d-%d): %s - %s done".formatted(
@@ -413,6 +412,9 @@ public class AnalystController {
                                     it.getEventName(),
                                     it.getTime()
                             ));
+                            jdbcTemplate.update("""
+                                    insert into pc(pc_name, event_id, status) VALUES ('thinkpad', :event_id, 'ok')                  
+                                      """, new MapSqlParameterSource().addValue("event_id", it.getId()));
                         }
                         browser.close();
                     } catch (Exception ex) {
@@ -421,6 +423,9 @@ public class AnalystController {
                                 "update event_crawl set status = 'failed' where id = :id",
                                 new MapSqlParameterSource().addValue("id", it.getId())
                         );
+                        jdbcTemplate.update("""
+                                insert into pc(pc_name, event_id, status) VALUES ('thinkpad', :event_id, 'fail')                  
+                                  """, new MapSqlParameterSource().addValue("event_id", it.getId()));
                     } finally {
                         var sqlDel = "DELETE FROM event_crawl  WHERE id=:id AND status = 'in_progress'";
                         jdbcTemplate.update(sqlDel, new MapSqlParameterSource().addValue("id", it.getId()));
@@ -437,16 +442,16 @@ public class AnalystController {
 
     private <T extends BaseOdd> List<T> parseOdds(Document doc, Function<List<Element>, T> rowMapper) {
         return doc.select("table.el-table__body")
-                  .select("tr.el-table__row")
-                  .stream()
-                  .map(r -> rowMapper.apply(r.select("td")))
-                  .filter(Objects::nonNull)
-                  .filter(it -> !it.getOddDate().contains("'"))
-                  .filter(it -> DateUtil.parseOddDate(it.getOddDate(), null) != null)
-                  .sorted(Comparator.comparing(
-                          (T o) -> DateUtil.parseOddDate(o.getOddDate())
-                  ).reversed())
-                  .limit(15)
-                  .toList();
+                .select("tr.el-table__row")
+                .stream()
+                .map(r -> rowMapper.apply(r.select("td")))
+                .filter(Objects::nonNull)
+                .filter(it -> !it.getOddDate().contains("'"))
+                .filter(it -> DateUtil.parseOddDate(it.getOddDate(), null) != null)
+                .sorted(Comparator.comparing(
+                        (T o) -> DateUtil.parseOddDate(o.getOddDate())
+                ).reversed())
+                .limit(15)
+                .toList();
     }
 }
