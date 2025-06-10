@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,16 +31,14 @@ import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -52,12 +51,41 @@ public class MainController {
     private final Gson gson = new Gson();
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
+    @GetMapping(value = "under", produces = MediaType.TEXT_PLAIN_VALUE)
+    public Object under(@RequestParam(required = false, defaultValue = "1") String mode) {
+        var events = getEvents("");
+        return events.stream()
+                     .filter(it -> List.of("2.25", "2/2.5").contains(Optional.ofNullable(it.getOddsGoal())
+                                                                             .filter(odds -> !odds.isEmpty())
+                                                                             .map(List::getFirst)
+                                                                             .map(OddGoal::getGoals)
+                                                                             .orElse("null")))
+                     .collect(Collectors.collectingAndThen(
+                             Collectors.toList(),
+                             list -> "Tổng số event: " + list.size() + "\n" +
+                                     list.stream()
+                                         .map(it -> "1".equalsIgnoreCase(mode) ? it.toResultUnder() : it.toResult(true))
+                                         .collect(Collectors.joining("\n"))
+                     ));
+    }
+
     @GetMapping(value = "current", produces = MediaType.TEXT_PLAIN_VALUE)
     public Object current(
             @RequestParam(value = "league_name", defaultValue = "") String leagueName,
-            @RequestParam(value = "range_type", defaultValue = "full") String rangeType,
             @RequestParam(value = "showOdd", required = false) Boolean showOdd
     ) {
+        return getEvents(leagueName)
+                .stream()
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        list -> "Tổng số event: " + list.size() + "\n" +
+                                list.stream()
+                                    .map(it -> it.toResult(true))
+                                    .collect(Collectors.joining("\n"))
+                ));
+    }
+
+    private List<EventResult> getEvents(String leagueName) {
         var sql = """
                 SELECT e.event_id,
                        e.event_name,
@@ -67,23 +95,15 @@ public class MainController {
                        o.odd_value
                 FROM events e
                          LEFT JOIN odds o ON e.event_id = o.event_id
-                WHERE e.event_date BETWEEN
-                    CASE
-                        WHEN :range_type = 'full'
-                            THEN CONVERT_TZ(CURDATE(), '+00:00', '+07:00')
-                        ELSE UTC_TIMESTAMP() + INTERVAL 7 HOUR
-                        END
-                    AND
-                    CASE
-                        WHEN :range_type = 'full'
-                            THEN CONVERT_TZ(CURDATE() + INTERVAL 1 DAY, '+00:00', '+07:00')
-                        ELSE UTC_TIMESTAMP() + INTERVAL (7 + 4) HOUR
-                        END
+                WHERE e.event_date BETWEEN :start_date AND :end_date
                    AND e.league_name LIKE :league_name
                 ORDER BY e.event_date
                 """;
+        var startDate = DateUtil.currentDateNow();
+        var endDate = DateUtil.next7Days();
         var param = new MapSqlParameterSource()
-                .addValue("range_type", rangeType)
+                .addValue("start_date", startDate)
+                .addValue("end_date", endDate)
                 .addValue("league_name", "%" + leagueName + "%");
         return jdbcTemplate.query(sql, param, (rs, i) -> new EventDTO(rs))
                            .stream()
@@ -92,8 +112,7 @@ public class MainController {
                            .stream()
                            .map(EventResult::new)
                            .sorted(Comparator.comparing(EventResult::getEventDate))
-                           .map(it -> it.toResult(showOdd))
-                           .collect(Collectors.joining("\n"));
+                           .toList();
     }
 
     @GetMapping(value = "test", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -115,8 +134,8 @@ public class MainController {
 
             int previousHeight = 0;
             int currentHeight;
-            int maxTries = 200;
-            int scrollStep = 800;
+            int maxTries = 2000;
+            int scrollStep = 500;
             int tries = 0;
 
             while (tries < maxTries) {
@@ -141,7 +160,7 @@ public class MainController {
                     break; // Không còn phần tử mới load
                 }
                 page.evaluate("window.scrollBy(0, %d)".formatted(scrollStep));
-                page.waitForTimeout(3000); // Đợi nội dung mới load (1s)
+                page.waitForTimeout(300);
                 previousHeight += scrollStep;
                 tries++;
             }
@@ -155,7 +174,12 @@ public class MainController {
                                        .addValue("league_name", it.getLeagueName())
                                        .addValue("event_date", DateUtil.parseDate(it.getTime())))
                                .toList();
-            var sql = "insert into events(detail_link, event_name, event_date, league_name) values (:event_link, :event_name, :event_date, :league_name)";
+            var sql = """
+                    insert into events(detail_link, event_name, event_date, league_name) 
+                    values (:event_link, :event_name, :event_date, :league_name)
+                    ON DUPLICATE KEY UPDATE
+                        league_name = :league_name
+                    """;
             jdbcTemplate.batchUpdate(sql, params.toArray(new MapSqlParameterSource[0]));
 
 
@@ -187,25 +211,26 @@ public class MainController {
                   .toList();
     }
 
-    @GetMapping("crawl-odd")
+    //    @Scheduled(fixedDelay = 60 * 60 * 1000, initialDelay = 15 * 60 * 1000)
+    @GetMapping("odd-1")
     public void crawalOdd() {
         crawlOdd();
     }
 
     @GetMapping("league")
-    public Object getLeagues(@RequestParam(value = "day",defaultValue = "today") String day) {
+    public Object getLeagues(@RequestParam(value = "day", defaultValue = "today") String day) {
         var sql = """
                 select league_name, MIN(event_date) AS event_date
                 from events
                 WHERE event_date BETWEEN
                           CASE
-                              WHEN :day = 'today' THEN CONCAT(CURDATE(), ' 00:00:00')
-                              WHEN :day = 'tomorrow' THEN CONCAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), ' 00:00:00')
+                              WHEN :day = 'today' THEN CONCAT('2025-06-05', ' 00:00:00')
+                              WHEN :day = 'tomorrow' THEN CONCAT(DATE_ADD('2025-06-05', INTERVAL 1 DAY), ' 00:00:00')
                               END
                           AND
                           CASE
-                              WHEN :day = 'today' THEN CONCAT(CURDATE(), ' 23:59:59')
-                              WHEN :day = 'tomorrow' THEN CONCAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), ' 23:59:59')
+                              WHEN :day = 'today' THEN CONCAT('2025-06-05', ' 23:59:59')
+                              WHEN :day = 'tomorrow' THEN CONCAT(DATE_ADD('2025-06-05', INTERVAL 1 DAY), ' 23:59:59')
                               END
                 GROUP BY league_name
                 HAVING event_date > DATE_ADD(NOW(), INTERVAL 7 HOUR)
@@ -213,37 +238,55 @@ public class MainController {
                 """;
         var param = new MapSqlParameterSource()
                 .addValue("day", day);
-        return jdbcTemplate.query(sql, param, (rs,i)-> new String[]{rs.getString("league_name"), rs.getString("event_date")});
+        return jdbcTemplate.query(
+                sql,
+                param,
+                (rs, i) -> new String[]{rs.getString("league_name"), rs.getString("event_date")}
+        );
     }
 
-    //    @Scheduled(fixedRate = 2 * 60 * 1000)
-    @GetMapping("odd")
+//    @Scheduled(fixedDelay = 3 * 30 * 1000)
     public void crawlOdd() {
-        // process 20 events every 2 minutes
         var sql = """
                 select event_id, event_name, event_date, league_name, detail_link
                 from events
-                where event_date between DATE_ADD(NOW(), INTERVAL 7 HOUR) and CONCAT(CURDATE(), ' 23:59:59')
-                order by event_date
+                where true 
+                and event_date between '2025-06-10 00:00:00' AND '2025-06-10 23:59:00' --  :start_date AND :end_date
+                order by last_update, event_date
                 """;
-        var events = jdbcTemplate.query(sql, (rs, i) -> new Event(rs));
+        var startDate = DateUtil.currentDateNow();
+        var endDate = DateUtil.next7Days();
+        var param = new MapSqlParameterSource()
+                .addValue("start_date", startDate)
+                .addValue("end_date", endDate);
+        var events = jdbcTemplate.query(sql, param, (rs, i) -> new Event(rs));
         if (!CollectionUtils.isEmpty(events)) {
             log.info("Start crawl odd begin: " + new Date());
-            int batchSize = 20;
-            int numThreads = (events.size() + batchSize - 1) / batchSize;
-            ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+            int batchSize = 12;
+            ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-            List<CompletableFuture<List<MapSqlParameterSource>>> futures = new ArrayList<>();
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
             for (int i = 0; i < events.size(); i += batchSize) {
                 int toIndex = Math.min(i + batchSize, events.size());
                 List<Event> subList = events.subList(i, toIndex);
 
-                CompletableFuture<List<MapSqlParameterSource>> future = CompletableFuture.supplyAsync(() -> {
-                    List<MapSqlParameterSource> result = new ArrayList<>();
+                int finalI = i;
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    int times = 1;
                     for (Event it : subList) {
-                        log.info("Crawl odd for event: " + it.getEventName() + " - " + it.getEventDate());
+                        List<MapSqlParameterSource> result = new ArrayList<>();
+                        log.info("Crawl odd for event (%d/%d) of index(%d-%d): ".formatted(
+                                times,
+                                subList.size(),
+                                finalI,
+                                toIndex
+                        ) + it.getEventName() + " - " + it.getEventDate());
                         var bet = getBet(it.getDetailLink());
+                        if (bet == null) {
+                            log.warning("Bet is null for event: " + it.getEventName());
+                            continue;
+                        }
 
                         result.add(new MapSqlParameterSource()
                                            .addValue("event_id", it.getEventId())
@@ -264,31 +307,34 @@ public class MainController {
                                            .addValue("event_id", it.getEventId())
                                            .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
                                            .addValue("odd_type", "corners"));
+                        times++;
+                        var sqlInsert = """
+                                insert into odds(odd_type, odd_value, event_id) 
+                                values (:odd_type, :odd_value, :event_id)
+                                ON DUPLICATE KEY UPDATE
+                                    odd_value = :odd_value
+                                """;
+                        jdbcTemplate.batchUpdate(sqlInsert, result.toArray(new MapSqlParameterSource[0]));
+                        var sqlUpdate = "update events set number_updated = number_updated + 1 where event_id = :event_id";
+                        jdbcTemplate.update(sqlUpdate, new MapSqlParameterSource()
+                                .addValue("event_id", it.getEventId()));
+                        log.log(Level.INFO, "Crawl odd for event (%d/%d) of index(%d-%d): %s - %s".formatted(
+                                times,
+                                subList.size(),
+                                finalI,
+                                toIndex,
+                                it.getEventName(),
+                                it.getEventDate()
+                        ));
                     }
-                    return result;
+                    log.info("Crawl odd end of index" + finalI + "-" + toIndex + ": " + new Date());
                 }, executor);
 
                 futures.add(future);
             }
 
-            // Đợi tất cả các luồng hoàn tất
-            List<MapSqlParameterSource> allParams = futures.stream()
-                                                           .map(CompletableFuture::join)
-                                                           .flatMap(List::stream)
-                                                           .toList();
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
             executor.shutdown();
-            System.out.println("Total odd params: " + allParams.size());
-            // Nếu bạn cần array
-            MapSqlParameterSource[] paramsArray = allParams.toArray(new MapSqlParameterSource[0]);
-
-            var sqlInsert = "insert into odds(odd_type, odd_value, event_id) values (:odd_type, :odd_value, :event_id)";
-            jdbcTemplate.batchUpdate(sqlInsert, paramsArray);
-            var sqlUpdate = "update events set is_crawl_odds = 'Y' where event_id = :event_id";
-            var params = events.stream()
-                               .map(it -> new MapSqlParameterSource()
-                                       .addValue("event_id", it.getEventId()))
-                               .toList();
-            jdbcTemplate.batchUpdate(sqlUpdate, params.toArray(new MapSqlParameterSource[0]));
         }
     }
 
@@ -300,7 +346,7 @@ public class MainController {
     private Bet getBet(String url) {
         var bet = Bet.builder();
         try (var playwright = Playwright.create()) {
-            var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+            var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
             var context = browser.newContext(
                     new Browser.NewContextOptions()
                             .setUserAgent(USER_AGENT)
@@ -309,12 +355,11 @@ public class MainController {
 
             var page = context.newPage();
             page.navigate(url);
-            page.waitForTimeout(2_500);
+            page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(20_000));
             var lookBoxes = page.querySelectorAll(".lookBox");
-
             if (lookBoxes.size() >= 2) {
                 lookBoxes.get(1).click();
-                page.waitForTimeout(2_000);
+                page.waitForTimeout(500);
                 var doc = Jsoup.parse(page.content());
                 var homeTeam = doc.select("[itemprop=homeTeam]").text();
                 var awayTeam = doc.select("[itemprop=awayTeam]").text();
@@ -337,7 +382,7 @@ public class MainController {
 
                 if (oddButton.size() >= 4) {
                     oddButton.get(1).click();
-                    page.waitForTimeout(2_000);
+                    page.waitForTimeout(500);
                     doc = Jsoup.parse(page.content());
                     var oddHandicap = parseOdds(doc, tds -> new OddHandicap(
                             tds.getFirst().text(),
@@ -348,7 +393,7 @@ public class MainController {
                     bet = bet.oddsHandicap(oddHandicap);
 
                     oddButton.get(2).click();
-                    page.waitForTimeout(2_000);
+                    page.waitForTimeout(500);
                     doc = Jsoup.parse(page.content());
                     var oddGoal = parseOdds(doc, tds -> new OddGoal(
                             tds.getFirst().text(),
@@ -359,7 +404,7 @@ public class MainController {
                     bet = bet.oddsGoal(oddGoal);
 
                     oddButton.get(3).click();
-                    page.waitForTimeout(2_000);
+                    page.waitForTimeout(500);
                     doc = Jsoup.parse(page.content());
                     var oddCorner = parseOdds(doc, tds -> new OddCorner(
                             tds.getFirst().text(),
@@ -371,11 +416,12 @@ public class MainController {
                 }
             }
 
-
             browser.close();
+            return bet.build();
+        } catch (Exception ex) {
+            log.log(Level.WARNING, "Error while crawling bet in link " + url, ex);
+            return null;
         }
-
-        return bet.build();
     }
 
     @GetMapping("/generate-pdf")
@@ -444,7 +490,7 @@ public class MainController {
                         pdfImg.setAlignment(Image.ALIGN_CENTER);
                         document.add(pdfImg);
                         document.newPage();
-                    } else{
+                    } else {
                         System.err.println("Image is null: " + imgUrl);
                     }
                 } catch (Exception e) {
@@ -478,7 +524,7 @@ public class MainController {
                   .toList();
     }
 
-    public  byte[] compressJpeg(BufferedImage image, float quality) throws IOException {
+    public byte[] compressJpeg(BufferedImage image, float quality) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();
@@ -493,19 +539,4 @@ public class MainController {
         jpgWriter.dispose();
         return baos.toByteArray();
     }
-    public static void main(String[] args) throws MalformedURLException {
-
-        var url = new URL(URLDecoder.decode("https://drive.google.com/viewerng/img?id=ACFrOgDjR3pV7OLyklHDCWz560WnLRZsZUnqUGVvcb_stGolBvQGiNITE1l3kgtBZqNpjXJUqQ7w6gj4oCbSKSaf4p_5Rs1D9t8KFU4jYIsFvOvAym9n2wxH4eyY8YMoX-XeeNK60Krm1_E_egkzCDltj4Maz5-nzpGGWaKQlkM6dVYioahV70euqOPjBH2neaXGrVfBgzDXch4Ad-LefOoUGbSiDdsf20WStN0ozarkOGAbD32BPR35OGKE9PE%3D&page=10&skiphighlight=true&w=1600&webp=true", StandardCharsets.UTF_8));
-        try (var in = url.openStream()) {
-            BufferedImage img = ImageIO.read(in);
-            if (img != null) {
-                System.out.println("Image loaded successfully: " + img.getWidth() + "x" + img.getHeight());
-            } else{
-                System.err.println("Image is null");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
 }

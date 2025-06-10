@@ -22,22 +22,24 @@ create table events
     away_name     varchar(255),
     home_id       bigint,
     away_id       bigint,
-    is_crawl_odds enum ('Y', 'N') default 'N',
+    number_updated int       default 0,
+    last_update    timestamp default current_timestamp on update current_timestamp,
     index idx_event (event_date, league_name, event_name),
     index idx_event_teams (home_id, away_id),
     index idx_event_date (event_date),
-    index idx_event_league (league_name)
+    index idx_event_league (league_name),
+    constraint event_unique
+        unique (event_date, event_name)
 );
 
 drop table if exists odds;
 create table odds
 (
-    odd_id    bigint auto_increment primary key,
-    odd_type  enum ('1x2', 'handicap', 'goals', 'corners'),
-    odd_value varchar(255),
-    odd_date  datetime,
     event_id  bigint,
-    index idx_odd_event (event_id, odd_date, odd_type)
+    odd_type  enum ('1x2', 'handicap', 'goals', 'corners'),
+    odd_value text,
+    primary key (event_id, odd_type),
+    index idx_odd_event (event_id, odd_type)
 );
 
 create table h2h

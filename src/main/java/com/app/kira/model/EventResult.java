@@ -1,16 +1,15 @@
 package com.app.kira.model;
 
+import com.app.kira.model.analyst.OddAnalyst;
+import com.app.kira.util.DateUtil;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.*;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.util.CollectionUtils;
 
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
+import java.util.*;
 
 @Getter
 @Setter
@@ -35,6 +34,71 @@ public class EventResult {
     @Builder.Default
     private List<OddCorner> oddsCorner = new ArrayList<>();
 
+    public static List<OddAnalyst> parseOdd(EventResult dto) {
+        List<OddAnalyst> odds = new ArrayList<>();
+
+        dto.getOdds1x2().stream()
+                .filter(odd -> DateUtil.parseOddDate(odd.getOddDate(), null) != null)
+                .filter(odd -> StringUtils.isNotBlank(odd.get_1()) && StringUtils.isNotBlank(odd.getX()) && StringUtils.isNotBlank(odd.get_2()))
+                .max(Comparator.comparing(odd -> DateUtil.parseOddDate(odd.getOddDate(), null)))
+                .ifPresent(odd -> odds.add(OddAnalyst.builder()
+                        .eventId(dto.getEventId().intValue())
+                        .oddType("1x2")
+                        .oddDate(DateUtil.parseOddDate(odd.getOddDate(), null))
+                        .homeOdd(parse(odd.get_1()))
+                        .awayOdd(parse(odd.get_2()))
+                        .drawOdd(parse(odd.getX()))
+                        .build()));
+
+        dto.getOddsGoal().stream()
+                .filter(odd -> DateUtil.parseOddDate(odd.getOddDate(), null) != null)
+                .filter(odd -> StringUtils.isNotBlank(odd.getGoals()) && StringUtils.isNotBlank(odd.getOver()) && StringUtils.isNotBlank(odd.getUnder()))
+                .max(Comparator.comparing(odd -> DateUtil.parseOddDate(odd.getOddDate(), null)))
+                .ifPresent(odd -> odds.add(OddAnalyst.builder()
+                        .eventId(dto.getEventId().intValue())
+                        .oddType("ou")
+                        .oddDate(DateUtil.parseOddDate(odd.getOddDate(), null))
+                        .line(odd.getGoals())
+                        .overOdd(parse(odd.getOver()))
+                        .underOdd(parse(odd.getUnder()))
+                        .build()));
+
+        dto.getOddsHandicap().stream()
+                .filter(odd -> DateUtil.parseOddDate(odd.getOddDate(), null) != null)
+                .filter(odd -> StringUtils.isNotBlank(odd.getHome()) && StringUtils.isNotBlank(odd.getAway()))
+                .max(Comparator.comparing(odd -> DateUtil.parseOddDate(odd.getOddDate(), null)))
+                .ifPresent(odd -> odds.add(OddAnalyst.builder()
+                        .eventId(dto.getEventId().intValue())
+                        .oddType("hdc")
+                        .oddDate(DateUtil.parseOddDate(odd.getOddDate(), null))
+                        .line(odd.getHome().split(" ")[0] + "#" + odd.getAway().split(" ")[0])
+                        .homeOdd(parse(odd.getHome().split(" ")[1]))
+                        .awayOdd(parse(odd.getAway().split(" ")[1]))
+                        .build()));
+
+        dto.getOddsCorner().stream()
+                .filter(odd -> DateUtil.parseOddDate(odd.getOddDate(), null) != null)
+                .filter(odd -> StringUtils.isNotBlank(odd.getCorner()) && StringUtils.isNotBlank(odd.getOver()) && StringUtils.isNotBlank(odd.getUnder()))
+                .max(Comparator.comparing(odd -> DateUtil.parseOddDate(odd.getOddDate(), null)))
+                .ifPresent(odd -> odds.add(OddAnalyst.builder()
+                        .eventId(dto.getEventId().intValue())
+                        .oddType("corner")
+                        .oddDate(DateUtil.parseOddDate(odd.getOddDate(), null))
+                        .line(odd.getCorner())
+                        .overOdd(parse(odd.getOver()))
+                        .underOdd(parse(odd.getUnder()))
+                        .build()));
+        return odds;
+    }
+
+    public static Double parse(String value) {
+        try {
+            return Double.parseDouble(value);
+        } catch (Exception ex) {
+            return 0.0;
+        }
+    }
+
     public EventResult(Map.Entry<Long, List<EventDTO>> entry) {
         this.eventId = entry.getKey();
         this.eventName = entry.getValue().getFirst().getEventName();
@@ -42,20 +106,28 @@ public class EventResult {
         this.eventDate = entry.getValue().getFirst().getEventDate();
 
         this.odds1x2 = getOddsByType(entry.getValue(), "1x2", Odd1x2.class);
-        this.oddsGoal = getOddsByType(entry.getValue(), "goals", OddGoal.class);
-        this.oddsHandicap = getOddsByType(entry.getValue(), "handicap", OddHandicap.class);
+        this.oddsGoal = getOddsByType(entry.getValue(), "goals, ou", OddGoal.class);
+        this.oddsHandicap = getOddsByType(entry.getValue(), "handicap, hdc", OddHandicap.class);
         this.oddsCorner = getOddsByType(entry.getValue(), "corners", OddCorner.class);
     }
 
     public static <T> List<T> getOddsByType(List<EventDTO> odds, String type, Class<T> clazz) {
         return odds.stream()
-                   .filter(odd -> type.equalsIgnoreCase(odd.getOddType()))
-                   .flatMap(odd -> {
-                       var listType = TypeToken.getParameterized(List.class, clazz).getType();
-                       List<T> parsedList = gson.fromJson(odd.getOddValue(), listType);
-                       return parsedList.stream();
-                   })
-                   .toList();
+                .filter(odd -> type.contains(odd.getOddType()))
+                .flatMap(odd -> {
+                    var listType = TypeToken.getParameterized(List.class, clazz).getType();
+                    List<T> parsedList = gson.fromJson(odd.getOddValue(), listType);
+                    return parsedList.stream();
+                })
+                .toList();
+    }
+
+    public String toResultUnder() {
+        return """
+                %s
+                %s
+                %s
+                """.formatted(getLeagueName(), getEventName(), getEventDate());
     }
 
     public String toResult(Boolean showOdd) {
@@ -110,7 +182,7 @@ public class EventResult {
                                                 
                         - Any value or contrarian betting insights based on odds movement analysis
                         \n
-                                        """.formatted(getEventName(), getLeagueName(), getEventDate().toString()));
+                        """.formatted(getEventName(), getLeagueName(), getEventDate().toString()));
         Optional.ofNullable(showOdd)
                 .filter(show -> show)
                 .ifPresent(show -> {
@@ -126,7 +198,7 @@ public class EventResult {
                         result.append(line1x2);
                         for (Odd1x2 odd : odds1x2) {
                             result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n",
-                                                        odd.getOddDate(), odd.get_1(), odd.getX(), odd.get_2()
+                                    odd.getOddDate(), odd.get_1(), odd.getX(), odd.get_2()
                             ));
                         }
                         result.append("\n");
@@ -145,7 +217,7 @@ public class EventResult {
                         result.append(line1x2);
                         for (OddGoal odd : oddsGoal) {
                             result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n",
-                                                        odd.getOddDate(), odd.getGoals(), odd.getOver(), odd.getUnder()
+                                    odd.getOddDate(), odd.getGoals(), odd.getOver(), odd.getUnder()
                             ));
                         }
                         result.append("\n");
@@ -158,7 +230,7 @@ public class EventResult {
                         result.append(lineHandicap);
                         for (OddHandicap odd : oddsHandicap) {
                             result.append(String.format("| %-40s | %-15s | %-15s |\n",
-                                                        odd.getOddDate(), odd.getHome(), odd.getAway()
+                                    odd.getOddDate(), odd.getHome(), odd.getAway()
                             ));
                         }
                         result.append("\n");
@@ -177,7 +249,7 @@ public class EventResult {
                         result.append(line1x2);
                         for (OddCorner odd : oddsCorner) {
                             result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n",
-                                                        odd.getOddDate(), odd.getCorner(), odd.getOver(), odd.getUnder()
+                                    odd.getOddDate(), odd.getCorner(), odd.getOver(), odd.getUnder()
                             ));
                         }
                     }

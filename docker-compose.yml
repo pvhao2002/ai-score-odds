@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "2605:2605"
+    environment:
+      DB_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Cho Playwright nếu cần truy cập host
+    tty: true  # Giữ container luôn chạy (tốt cho Playwright headless)
+
+volumes:
+  mysql_data:
