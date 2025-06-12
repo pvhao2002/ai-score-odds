@@ -18,7 +18,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -78,7 +77,7 @@ public class AnalystController {
     @GetMapping("init")
     public Object init() {
         // loop over the last 100 days to get format yyyyMMdd
-        var startDate = LocalDate.now().minusDays(125);
+        var startDate = LocalDate.now().minusDays(150);
         var endDate = LocalDate.now();
         var sqlInsertCrawlDate = """
                 insert into crawl_date (date, status)
@@ -251,7 +250,7 @@ public class AnalystController {
 
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try (var playwright = Playwright.create()) {
-                    var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
+                    var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
                     var context = browser.newContext(
                             new Browser.NewContextOptions()
                                     .setUserAgent(USER_AGENT)

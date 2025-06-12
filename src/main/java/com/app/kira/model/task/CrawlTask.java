@@ -39,7 +39,7 @@ public class CrawlTask implements Runnable {
         }
         log.info("Starting crawl task for " + events.size() + " events on OS: " + os);
         try (var playwright = Playwright.create();
-             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
+             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
              BrowserContext context = browser.newContext(
                      new Browser.NewContextOptions()
                              .setUserAgent(USER_AGENT))) {

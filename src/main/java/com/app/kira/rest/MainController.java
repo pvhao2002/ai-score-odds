@@ -326,7 +326,7 @@ public class MainController {
             int finalI = i;
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try (var playwright = Playwright.create()) {
-                    var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
+                    var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
                     var context = browser.newContext(
                             new Browser.NewContextOptions()
                                     .setUserAgent(USER_AGENT)
