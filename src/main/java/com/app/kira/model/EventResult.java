@@ -113,6 +113,7 @@ public class EventResult {
 
     public static <T> List<T> getOddsByType(List<EventDTO> odds, String type, Class<T> clazz) {
         return odds.stream()
+                .filter(odd -> StringUtils.isNotBlank(odd.getOddType()))
                 .filter(odd -> type.contains(odd.getOddType()))
                 .flatMap(odd -> {
                     var listType = TypeToken.getParameterized(List.class, clazz).getType();
@@ -128,6 +129,15 @@ public class EventResult {
                 %s
                 %s
                 """.formatted(getLeagueName(), getEventName(), getEventDate());
+    }
+
+    public String toResult(int idx) {
+        return """
+                Match: %d
+                League: %s
+                Event: %s
+                Date (GMT+7): %s
+                """.formatted(idx, getLeagueName(), getEventName(), getEventDate());
     }
 
     public String toResult(Boolean showOdd) {

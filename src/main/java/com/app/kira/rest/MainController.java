@@ -1,6 +1,7 @@
 package com.app.kira.rest;
 
 import com.app.kira.model.*;
+import com.app.kira.model.task.BrowserPool;
 import com.app.kira.util.DateUtil;
 import com.google.gson.Gson;
 import com.lowagie.text.Image;
@@ -33,15 +34,13 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Log
 @RestController
@@ -50,23 +49,57 @@ public class MainController {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final Gson gson = new Gson();
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+    private static final int BROWSER_POOL_SIZE = 5;
+
+    private final String PROMPT = """
+            I will provide a list of upcoming football matches below.
+            For each match, please predict the result and provide betting recommendations for the following markets:
+            – Asian Handicap
+            – 1X2 (European odds)
+            – Over/Under Goals
+            – Over/Under Corners
+            – Over/Under Cards
+                        
+            Base your analysis on current form, head-to-head record, team news, and tactical trends. If detailed data is not available, use probability and general patterns.
+                        
+            Matches:
+                        
+            %s
+            …
+                        
+            For each match, please present your answer in this format:
+                        
+            Score prediction:
+                        
+            Asian Handicap pick:
+                        
+            1X2 pick:
+                        
+            Over/Under Goals pick:
+                        
+            Over/Under Corners pick:
+                        
+            Over/Under Cards pick:
+                        
+            Reasoning:
+            """;
 
     @GetMapping(value = "under", produces = MediaType.TEXT_PLAIN_VALUE)
     public Object under(@RequestParam(required = false, defaultValue = "1") String mode) {
         var events = getEvents("");
         return events.stream()
-                     .filter(it -> List.of("2.25", "2/2.5").contains(Optional.ofNullable(it.getOddsGoal())
-                                                                             .filter(odds -> !odds.isEmpty())
-                                                                             .map(List::getFirst)
-                                                                             .map(OddGoal::getGoals)
-                                                                             .orElse("null")))
-                     .collect(Collectors.collectingAndThen(
-                             Collectors.toList(),
-                             list -> "Tổng số event: " + list.size() + "\n" +
-                                     list.stream()
-                                         .map(it -> "1".equalsIgnoreCase(mode) ? it.toResultUnder() : it.toResult(true))
-                                         .collect(Collectors.joining("\n"))
-                     ));
+                .filter(it -> List.of("2.25", "2/2.5").contains(Optional.ofNullable(it.getOddsGoal())
+                        .filter(odds -> !odds.isEmpty())
+                        .map(List::getFirst)
+                        .map(OddGoal::getGoals)
+                        .orElse("null")))
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        list -> "Tổng số event: " + list.size() + "\n" +
+                                list.stream()
+                                        .map(it -> "1".equalsIgnoreCase(mode) ? it.toResultUnder() : it.toResult(true))
+                                        .collect(Collectors.joining("\n"))
+                ));
     }
 
     @GetMapping(value = "current", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -80,8 +113,25 @@ public class MainController {
                         Collectors.toList(),
                         list -> "Tổng số event: " + list.size() + "\n" +
                                 list.stream()
-                                    .map(it -> it.toResult(true))
-                                    .collect(Collectors.joining("\n"))
+                                        .map(it -> it.toResult(true))
+                                        .collect(Collectors.joining("\n"))
+                ));
+    }
+
+    @GetMapping(value = "new-predict", produces = MediaType.TEXT_PLAIN_VALUE)
+    public Object newPredict(
+            @RequestParam(value = "league_name", defaultValue = "") String leagueName
+    ) {
+        return getEvents(leagueName)
+                .stream()
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        list -> "Tổng số event: " + list.size() + "\n" +
+                                PROMPT.formatted(
+                                        IntStream.range(0, list.size())
+                                                .mapToObj(i -> list.get(i).toResult(i + 1))
+                                                .collect(Collectors.joining("\n"))
+                                ) + "\n\n"
                 ));
     }
 
@@ -106,13 +156,13 @@ public class MainController {
                 .addValue("end_date", endDate)
                 .addValue("league_name", "%" + leagueName + "%");
         return jdbcTemplate.query(sql, param, (rs, i) -> new EventDTO(rs))
-                           .stream()
-                           .collect(Collectors.groupingBy(EventDTO::getEventId))
-                           .entrySet()
-                           .stream()
-                           .map(EventResult::new)
-                           .sorted(Comparator.comparing(EventResult::getEventDate))
-                           .toList();
+                .stream()
+                .collect(Collectors.groupingBy(EventDTO::getEventId))
+                .entrySet()
+                .stream()
+                .map(EventResult::new)
+                .sorted(Comparator.comparing(EventResult::getEventDate))
+                .toList();
     }
 
     @GetMapping(value = "test", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -146,13 +196,13 @@ public class MainController {
                 var doc = Jsoup.parse(pageSource, "https://www.aiscore.com/");
 
                 getEvent(doc, date).forEach(e -> result.stream()
-                                                       .filter(it -> it.getEventName().equals(e.getEventName()))
-                                                       .findFirst()
-                                                       .ifPresentOrElse(
-                                                               it -> {
-                                                               },
-                                                               () -> result.add(e)
-                                                       ));
+                        .filter(it -> it.getEventName().equals(e.getEventName()))
+                        .findFirst()
+                        .ifPresentOrElse(
+                                it -> {
+                                },
+                                () -> result.add(e)
+                        ));
 
                 currentHeight = ((Number) page.evaluate("() => document.body.scrollHeight")).intValue();
 
@@ -168,12 +218,12 @@ public class MainController {
             browser.close();
 
             var params = result.stream()
-                               .map(it -> new MapSqlParameterSource()
-                                       .addValue("event_link", it.getDetailLink())
-                                       .addValue("event_name", it.getEventName())
-                                       .addValue("league_name", it.getLeagueName())
-                                       .addValue("event_date", DateUtil.parseDate(it.getTime())))
-                               .toList();
+                    .map(it -> new MapSqlParameterSource()
+                            .addValue("event_link", it.getDetailLink())
+                            .addValue("event_name", it.getEventName())
+                            .addValue("league_name", it.getLeagueName())
+                            .addValue("event_date", DateUtil.parseDate(it.getTime())))
+                    .toList();
             var sql = """
                     insert into events(detail_link, event_name, event_date, league_name) 
                     values (:event_link, :event_name, :event_date, :league_name)
@@ -196,24 +246,24 @@ public class MainController {
 
     private List<EventHtml> getEvent(Document doc, String date) {
         return doc.select(".vue-recycle-scroller__item-view")
-                  .stream()
-                  .map(l -> {
-                      var leagueName = "%s %s".formatted(
-                              l.select(".country-name").text(),
-                              l.select(".compe-name").text()
-                      );
-                      return l.select("a.match-container")
-                              .stream()
-                              .map(e -> new EventHtml(e, leagueName, date))
-                              .toList();
-                  })
-                  .flatMap(Collection::stream)
-                  .toList();
+                .stream()
+                .map(l -> {
+                    var leagueName = "%s %s".formatted(
+                            l.select(".country-name").text(),
+                            l.select(".compe-name").text()
+                    );
+                    return l.select("a.match-container")
+                            .stream()
+                            .map(e -> new EventHtml(e, leagueName, date))
+                            .toList();
+                })
+                .flatMap(Collection::stream)
+                .toList();
     }
 
     //    @Scheduled(fixedDelay = 60 * 60 * 1000, initialDelay = 15 * 60 * 1000)
     @GetMapping("odd-1")
-    public void crawalOdd() {
+    public void crawalOdd() throws InterruptedException {
         crawlOdd();
     }
 
@@ -245,13 +295,13 @@ public class MainController {
         );
     }
 
-//    @Scheduled(fixedDelay = 3 * 30 * 1000)
+    //    @Scheduled(fixedDelay = 3 * 30 * 1000)
     public void crawlOdd() {
         var sql = """
                 select event_id, event_name, event_date, league_name, detail_link
                 from events
                 where true 
-                and event_date between '2025-06-10 00:00:00' AND '2025-06-10 23:59:00' --  :start_date AND :end_date
+                and event_date between '2025-06-10 00:00:00' AND '2025-06-14 23:59:00' --  :start_date AND :end_date
                 order by last_update, event_date
                 """;
         var startDate = DateUtil.currentDateNow();
@@ -260,19 +310,30 @@ public class MainController {
                 .addValue("start_date", startDate)
                 .addValue("end_date", endDate);
         var events = jdbcTemplate.query(sql, param, (rs, i) -> new Event(rs));
-        if (!CollectionUtils.isEmpty(events)) {
-            log.info("Start crawl odd begin: " + new Date());
-            int batchSize = 12;
-            ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        if (CollectionUtils.isEmpty(events)) {
+            return;
+        }
+        log.info("Start crawl odd begin: " + new Date());
+        int batchSize = (int) Math.ceil((double) events.size() / BROWSER_POOL_SIZE);
+        ExecutorService executor = Executors.newFixedThreadPool(BROWSER_POOL_SIZE);
 
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-            for (int i = 0; i < events.size(); i += batchSize) {
-                int toIndex = Math.min(i + batchSize, events.size());
-                List<Event> subList = events.subList(i, toIndex);
+        for (int i = 0; i < events.size(); i += batchSize) {
+            int toIndex = Math.min(i + batchSize, events.size());
+            List<Event> subList = events.subList(i, toIndex);
 
-                int finalI = i;
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+            int finalI = i;
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                try (var playwright = Playwright.create()) {
+                    var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
+                    var context = browser.newContext(
+                            new Browser.NewContextOptions()
+                                    .setUserAgent(USER_AGENT)
+                                    .setJavaScriptEnabled(true)
+                                    .setIgnoreHTTPSErrors(true));
+
+                    var page = context.newPage();
                     int times = 1;
                     for (Event it : subList) {
                         List<MapSqlParameterSource> result = new ArrayList<>();
@@ -282,31 +343,31 @@ public class MainController {
                                 finalI,
                                 toIndex
                         ) + it.getEventName() + " - " + it.getEventDate());
-                        var bet = getBet(it.getDetailLink());
+                        var bet = getBet(it.getDetailLink(), page);
                         if (bet == null) {
                             log.warning("Bet is null for event: " + it.getEventName());
                             continue;
                         }
 
                         result.add(new MapSqlParameterSource()
-                                           .addValue("event_id", it.getEventId())
-                                           .addValue("odd_value", gson.toJson(bet.getOdds1x2()))
-                                           .addValue("odd_type", "1x2"));
+                                .addValue("event_id", it.getEventId())
+                                .addValue("odd_value", gson.toJson(bet.getOdds1x2()))
+                                .addValue("odd_type", "1x2"));
 
                         result.add(new MapSqlParameterSource()
-                                           .addValue("event_id", it.getEventId())
-                                           .addValue("odd_value", gson.toJson(bet.getOddsHandicap()))
-                                           .addValue("odd_type", "handicap"));
+                                .addValue("event_id", it.getEventId())
+                                .addValue("odd_value", gson.toJson(bet.getOddsHandicap()))
+                                .addValue("odd_type", "handicap"));
 
                         result.add(new MapSqlParameterSource()
-                                           .addValue("event_id", it.getEventId())
-                                           .addValue("odd_value", gson.toJson(bet.getOddsGoal()))
-                                           .addValue("odd_type", "goals"));
+                                .addValue("event_id", it.getEventId())
+                                .addValue("odd_value", gson.toJson(bet.getOddsGoal()))
+                                .addValue("odd_type", "goals"));
 
                         result.add(new MapSqlParameterSource()
-                                           .addValue("event_id", it.getEventId())
-                                           .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
-                                           .addValue("odd_type", "corners"));
+                                .addValue("event_id", it.getEventId())
+                                .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
+                                .addValue("odd_type", "corners"));
                         times++;
                         var sqlInsert = """
                                 insert into odds(odd_type, odd_value, event_id) 
@@ -328,100 +389,81 @@ public class MainController {
                         ));
                     }
                     log.info("Crawl odd end of index" + finalI + "-" + toIndex + ": " + new Date());
-                }, executor);
-
-                futures.add(future);
-            }
-
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            executor.shutdown();
+                    browser.close();
+                }
+            }, executor);
+            futures.add(future);
         }
+
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        executor.shutdown();
     }
 
-    @GetMapping(value = "k", produces = MediaType.TEXT_PLAIN_VALUE)
-    public Object k(@RequestParam("url") String url) {
-        return getBet(url).toResult();
-    }
-
-    private Bet getBet(String url) {
+    private Bet getBet(String url, Page page) {
         var bet = Bet.builder();
-        try (var playwright = Playwright.create()) {
-            var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
-            var context = browser.newContext(
-                    new Browser.NewContextOptions()
-                            .setUserAgent(USER_AGENT)
-                            .setJavaScriptEnabled(true)
-                            .setIgnoreHTTPSErrors(true));
+        page.navigate(url);
+        page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(20_000));
+        var lookBoxes = page.querySelectorAll(".lookBox");
+        if (lookBoxes.size() >= 2) {
+            lookBoxes.get(1).click();
+            page.waitForTimeout(1000);
+            var doc = Jsoup.parse(page.content());
+            var homeTeam = doc.select("[itemprop=homeTeam]").text();
+            var awayTeam = doc.select("[itemprop=awayTeam]").text();
+            var leagueName = doc.select(".comp-name a").text();
+            var eventDate = doc.select("[itemprop=startDate]").text();
 
-            var page = context.newPage();
-            page.navigate(url);
-            page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(20_000));
-            var lookBoxes = page.querySelectorAll(".lookBox");
-            if (lookBoxes.size() >= 2) {
-                lookBoxes.get(1).click();
-                page.waitForTimeout(500);
-                var doc = Jsoup.parse(page.content());
-                var homeTeam = doc.select("[itemprop=homeTeam]").text();
-                var awayTeam = doc.select("[itemprop=awayTeam]").text();
-                var leagueName = doc.select(".comp-name a").text();
-                var eventDate = doc.select("[itemprop=startDate]").text();
+            var odd1x2 = parseOdds(doc, tds -> new Odd1x2(
+                    tds.getFirst().text(),
+                    tds.get(1).text(),
+                    tds.get(2).text(),
+                    tds.getLast().text()
+            ));
 
-                var odd1x2 = parseOdds(doc, tds -> new Odd1x2(
+            bet = bet.eventDate(eventDate)
+                    .eventName("%s v %s".formatted(homeTeam, awayTeam))
+                    .leagueName(leagueName)
+                    .odds1x2(odd1x2);
+
+            var oddButton = page.querySelectorAll(".changeItem");
+
+            if (oddButton.size() >= 4) {
+                oddButton.get(1).click();
+                page.waitForTimeout(1000);
+                doc = Jsoup.parse(page.content());
+                var oddHandicap = parseOdds(doc, tds -> new OddHandicap(
+                        tds.getFirst().text(),
+                        tds.get(1).text(),
+                        tds.getLast().text()
+                ));
+
+                bet = bet.oddsHandicap(oddHandicap);
+
+                oddButton.get(2).click();
+                page.waitForTimeout(1000);
+                doc = Jsoup.parse(page.content());
+                var oddGoal = parseOdds(doc, tds -> new OddGoal(
                         tds.getFirst().text(),
                         tds.get(1).text(),
                         tds.get(2).text(),
                         tds.getLast().text()
                 ));
+                bet = bet.oddsGoal(oddGoal);
 
-                bet = bet.eventDate(eventDate)
-                         .eventName("%s v %s".formatted(homeTeam, awayTeam))
-                         .leagueName(leagueName)
-                         .odds1x2(odd1x2);
-
-                var oddButton = page.querySelectorAll(".changeItem");
-
-                if (oddButton.size() >= 4) {
-                    oddButton.get(1).click();
-                    page.waitForTimeout(500);
-                    doc = Jsoup.parse(page.content());
-                    var oddHandicap = parseOdds(doc, tds -> new OddHandicap(
-                            tds.getFirst().text(),
-                            tds.get(1).text(),
-                            tds.getLast().text()
-                    ));
-
-                    bet = bet.oddsHandicap(oddHandicap);
-
-                    oddButton.get(2).click();
-                    page.waitForTimeout(500);
-                    doc = Jsoup.parse(page.content());
-                    var oddGoal = parseOdds(doc, tds -> new OddGoal(
-                            tds.getFirst().text(),
-                            tds.get(1).text(),
-                            tds.get(2).text(),
-                            tds.getLast().text()
-                    ));
-                    bet = bet.oddsGoal(oddGoal);
-
-                    oddButton.get(3).click();
-                    page.waitForTimeout(500);
-                    doc = Jsoup.parse(page.content());
-                    var oddCorner = parseOdds(doc, tds -> new OddCorner(
-                            tds.getFirst().text(),
-                            tds.get(1).text(),
-                            tds.get(2).text(),
-                            tds.getLast().text()
-                    ));
-                    bet = bet.oddsCorner(oddCorner);
-                }
+                oddButton.get(3).click();
+                page.waitForTimeout(1000);
+                doc = Jsoup.parse(page.content());
+                var oddCorner = parseOdds(doc, tds -> new OddCorner(
+                        tds.getFirst().text(),
+                        tds.get(1).text(),
+                        tds.get(2).text(),
+                        tds.getLast().text()
+                ));
+                bet = bet.oddsCorner(oddCorner);
             }
-
-            browser.close();
-            return bet.build();
-        } catch (Exception ex) {
-            log.log(Level.WARNING, "Error while crawling bet in link " + url, ex);
-            return null;
         }
+        return bet.build();
     }
 
     @GetMapping("/generate-pdf")
@@ -451,13 +493,13 @@ public class MainController {
                 }
                 System.out.println("Crawl time: " + i + ", number of images: " + imageLinks.size());
                 page.evaluate("""
-                                      () => {
-                                          const scroller = document.querySelector('.ndfHFb-c4YZDc-cYSp0e-s2gQvd, .ndfHFb-c4YZDc-s2gQvd, .ndfHFb-c4YZDc-s2gQvd-sn54Q') || document.scrollingElement;
-                                          if (scroller) {
-                                              scroller.scrollBy(0, 800);
-                                          }
-                                      }
-                                      """);
+                        () => {
+                            const scroller = document.querySelector('.ndfHFb-c4YZDc-cYSp0e-s2gQvd, .ndfHFb-c4YZDc-s2gQvd, .ndfHFb-c4YZDc-s2gQvd-sn54Q') || document.scrollingElement;
+                            if (scroller) {
+                                scroller.scrollBy(0, 800);
+                            }
+                        }
+                        """);
                 page.waitForTimeout(300);
             }
             System.out.println("Số ảnh tìm thấy: " + imageLinks.size());
@@ -466,11 +508,11 @@ public class MainController {
         }
         // Sắp xếp theo param page
         List<String> sortedLinks = imageLinks.stream()
-                                             .sorted(Comparator.comparingInt(link -> {
-                                                 Matcher matcher = Pattern.compile("[?&]page=(\\d+)").matcher(link);
-                                                 return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
-                                             }))
-                                             .toList();
+                .sorted(Comparator.comparingInt(link -> {
+                    Matcher matcher = Pattern.compile("[?&]page=(\\d+)").matcher(link);
+                    return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+                }))
+                .toList();
         System.out.println("Số ảnh sau khi sắp xếp: " + sortedLinks.size());
         ImageIO.scanForPlugins();
         // Tạo PDF
@@ -505,23 +547,23 @@ public class MainController {
         File file = new File(outputPath);
         InputStreamResource resource = new InputStreamResource(new FileInputStream(file));
         return ResponseEntity.ok()
-                             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + file.getName())
-                             .contentType(MediaType.APPLICATION_PDF)
-                             .contentLength(file.length())
-                             .body(resource);
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + file.getName())
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(file.length())
+                .body(resource);
     }
 
     private <T extends BaseOdd> List<T> parseOdds(Document doc, Function<List<Element>, T> rowMapper) {
         return doc.select("table.el-table__body")
-                  .select("tr.el-table__row")
-                  .stream()
-                  .map(r -> rowMapper.apply(r.select("td")))
-                  .filter(Objects::nonNull)
-                  .sorted(Comparator.comparing(
-                          (T o) -> DateUtil.parseOddDate(o.getOddDate())
-                  ).reversed())
-                  .limit(15)
-                  .toList();
+                .select("tr.el-table__row")
+                .stream()
+                .map(r -> rowMapper.apply(r.select("td")))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(
+                        (T o) -> DateUtil.parseOddDate(o.getOddDate())
+                ).reversed())
+                .limit(15)
+                .toList();
     }
 
     public byte[] compressJpeg(BufferedImage image, float quality) throws IOException {

@@ -77,3 +77,10 @@ create table odd_event (
 
 alter table odd_analyst
     add column status enum ('done', 'in_progress', 'pending', 'fail') default 'pending';
+alter table event_analyst
+    add column link text;
+ALTER TABLE event_crawl
+    ADD COLUMN worker    VARCHAR(64),
+    ADD COLUMN pick_time DATETIME;
+alter table event_crawl
+    modify status enum ('pending', 'in_progress', 'failed', 'picked') default 'pending';

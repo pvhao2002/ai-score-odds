@@ -52,8 +52,8 @@ public class EventHtml {
 
         var index = htScoreStr.indexOf("-");
         if (index != -1) {
-            this.htHomeScore = parseScore(htScoreStr.substring(0, index).trim());
-            this.htAwayScore = parseScore(htScoreStr.substring(index + 1).trim());
+            this.htHomeScore = parseScore(String.valueOf(htScoreStr.charAt(index - 1)));
+            this.htAwayScore = parseScore(String.valueOf(htScoreStr.charAt(index + 1)));
         } else {
             this.htHomeScore = 0;
             this.htAwayScore = 0;
@@ -61,8 +61,8 @@ public class EventHtml {
 
         index = cornerStr.indexOf("-");
         if (index != -1) {
-            this.homeCorner = parseScore(cornerStr.substring(0, index).trim());
-            this.awayCorner = parseScore(cornerStr.substring(index + 1).trim());
+            this.homeCorner = parseScore(String.valueOf(cornerStr.charAt(index - 1)));
+            this.awayCorner = parseScore(String.valueOf(cornerStr.charAt(index + 1)));
         } else {
             this.homeCorner = 0;
             this.awayCorner = 0;
