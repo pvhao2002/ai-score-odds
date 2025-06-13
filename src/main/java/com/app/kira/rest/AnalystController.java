@@ -2,7 +2,6 @@ package com.app.kira.rest;
 
 import com.app.kira.model.EventHtml;
 import com.app.kira.model.analyst.CrawlDate;
-import com.app.kira.model.task.BrowserPool;
 import com.app.kira.model.task.CrawlTask;
 import com.app.kira.util.DateUtil;
 import com.microsoft.playwright.Browser;
@@ -38,8 +37,7 @@ import java.util.logging.Level;
 @RequiredArgsConstructor
 public class AnalystController {
     private final NamedParameterJdbcTemplate jdbcTemplate;
-    private static final int BROWSER_POOL_SIZE = 5;
-    private final BrowserPool browserPool = new BrowserPool(BROWSER_POOL_SIZE);
+    private static final int BROWSER_POOL_SIZE = 10;
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
     private String osName;
 
@@ -274,7 +272,7 @@ public class AnalystController {
         log.info("Crawl analystScheduleEventByDate end: " + new Date());
     }
 
-//    @Scheduled(fixedDelay = 1000, initialDelay = 10_000)
+    @Scheduled(fixedDelay = 1000, initialDelay = 10_000)
     public void event() {
         jdbcTemplate.update("""
                  update event_crawl
@@ -282,7 +280,7 @@ public class AnalystController {
                      worker = :worker,
                      pick_time = now()
                  where status = 'pending' or status = 'failed'
-                limit 50
+                limit 200
                 """, new MapSqlParameterSource().addValue("worker", osName));
         var sqlEvents = """
                 select id,
@@ -291,34 +289,39 @@ public class AnalystController {
                        detail_link
                 from event_crawl
                 where status = 'picked' and worker = :worker
-                LIMIT 50
+                LIMIT 200
                 """;
         var events = jdbcTemplate.query(sqlEvents, new MapSqlParameterSource().addValue("worker", osName), BeanPropertyRowMapper.newInstance(EventHtml.class));
         if (events.isEmpty()) {
-            browserPool.closeAll();
             return;
         }
 
         log.info("Start crawl odd begin: " + new Date());
         int batchSize = (int) Math.ceil(events.size() / (double) BROWSER_POOL_SIZE);
-        ExecutorService executor = Executors.newFixedThreadPool(BROWSER_POOL_SIZE);
+        try (ExecutorService executor = Executors.newFixedThreadPool(BROWSER_POOL_SIZE);) {
+            List<Future<?>> futures = new ArrayList<>();
 
-        List<Future<?>> futures = new ArrayList<>();
-
-        for (int i = 0; i < events.size(); i += batchSize) {
-            int toIndex = Math.min(i + batchSize, events.size());
-            List<EventHtml> subList = events.subList(i, toIndex);
-            futures.add(executor.submit(new CrawlTask(subList, jdbcTemplate, osName)));
-        }
-        for (Future<?> future : futures) {
-            try {
-                future.get();
-            } catch (Exception e) {
-                e.printStackTrace();
+            for (int i = 0; i < events.size(); i += batchSize) {
+                int toIndex = Math.min(i + batchSize, events.size());
+                List<EventHtml> subList = events.subList(i, toIndex);
+                futures.add(executor.submit(new CrawlTask(subList, jdbcTemplate, osName)));
             }
+            for (Future<?> future : futures) {
+                future.get();
+            }
+            executor.shutdown();
+        } catch (Exception e) {
+            log.log(Level.WARNING, "Error during crawl odd", e);
+            jdbcTemplate.update("""
+                    update event_crawl
+                    set status = 'failed',
+                        worker = null,
+                        pick_time = null
+                    where worker = :worker
+                    """, new MapSqlParameterSource().addValue("worker", osName));
+        } finally {
+            log.info("Crawl odd end: " + new Date());
         }
-        executor.shutdown();
-        log.info("Crawl odd end: " + new Date());
     }
 
     @Scheduled(fixedDelay = 1000 * 60 * 60 * 24, initialDelay = 10_000)

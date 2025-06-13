@@ -54,8 +54,8 @@ public class CrawlTask implements Runnable {
                             new MapSqlParameterSource().addValue("id", event.getId())
                     );
                     page.navigate(event.getDetailLink() + "/odds");
-                    page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(30_000));
-                    var lookBoxes = page.querySelectorAll(".lookBox");
+                    page.waitForSelector(".lookBox.brb", new Page.WaitForSelectorOptions().setTimeout(30_000));
+                    var lookBoxes = page.querySelectorAll(".lookBox.brb");
                     if (!lookBoxes.isEmpty()) {
                         lookBoxes.getFirst().click();
                         var oddButton = page.querySelectorAll(".changeItem");
