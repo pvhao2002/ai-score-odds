@@ -272,7 +272,7 @@ public class AnalystController {
         log.info("Crawl analystScheduleEventByDate end: " + new Date());
     }
 
-    @Scheduled(fixedDelay = 1000, initialDelay = 10_000)
+//    @Scheduled(fixedDelay = 1000, initialDelay = 10_000)
     public void event() {
         jdbcTemplate.update("""
                  update event_crawl
@@ -324,7 +324,7 @@ public class AnalystController {
         }
     }
 
-    @Scheduled(fixedDelay = 1000 * 60 * 60 * 24, initialDelay = 10_000)
+    //@Scheduled(fixedDelay = 1000 * 60 * 60 * 24, initialDelay = 10_000)
     public void revokeEventCrawl() {
         var sql = """
                 update event_crawl
