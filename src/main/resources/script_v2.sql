@@ -148,3 +148,12 @@ alter table event_analyst
     add column last_hdc            varchar(25),
     add column first_ou            varchar(25),
     add column last_ou             varchar(25);
+
+create table router_setting
+(
+    crawl_setting_id int auto_increment primary key,
+    node             varchar(100) unique,
+    url              varchar(255),
+    is_active        tinyint(1) default 0,
+    last_update      datetime   default current_timestamp on update current_timestamp
+);

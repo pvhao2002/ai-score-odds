@@ -25,6 +25,8 @@ public class EventFilterAnalystDTO extends BaseEventAnalystDTO {
     String awayLineHdcMovement;
     String overLineMovement;
     String underLineMovement;
+    String homeLineHdc;
+    String awayLineHdc;
     Double firstHomeOdds;
     Double lastHomeOdds;
     Double firstAwayOdds;
@@ -53,6 +55,8 @@ public class EventFilterAnalystDTO extends BaseEventAnalystDTO {
         this.lastOverOdds = item.getLastOverOdds();
         this.firstUnderOdds = item.getFirstUnderOdds();
         this.lastUnderOdds = item.getLastUnderOdds();
+        this.homeLineHdc = item.getHomeLineHdc();
+        this.awayLineHdc = item.getAwayLineHdc();
         this.firstHdc = item.getFirstHdc();
         this.lastHdc = item.getLastHdc();
         this.firstOu = item.getFirstOu();

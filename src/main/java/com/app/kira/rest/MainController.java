@@ -32,12 +32,8 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Function;
-import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -226,7 +222,7 @@ public class MainController {
                             .addValue("event_date", DateUtil.parseDate(it.getTime())))
                     .toList();
             var sql = """
-                    insert into events(detail_link, event_name, event_date, league_name) 
+                    insert into events(detail_link, event_name, event_date, league_name)
                     values (:event_link, :event_name, :event_date, :league_name)
                     ON DUPLICATE KEY UPDATE
                         league_name = :league_name
@@ -301,8 +297,7 @@ public class MainController {
         var sql = """
                 select event_id, event_name, event_date, league_name, detail_link
                 from events
-                where true 
-                and event_date between '2025-06-10 00:00:00' AND '2025-06-14 23:59:00' --  :start_date AND :end_date
+                where true
                 order by last_update, event_date
                 """;
         var startDate = DateUtil.currentDateNow();
@@ -315,90 +310,55 @@ public class MainController {
             return;
         }
         log.info("Start crawl odd begin: " + new Date());
-        int batchSize = (int) Math.ceil((double) events.size() / BROWSER_POOL_SIZE);
-        ExecutorService executor = Executors.newFixedThreadPool(BROWSER_POOL_SIZE);
+        try (var playwright = Playwright.create()) {
+            var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+            var context = browser.newContext(
+                    new Browser.NewContextOptions()
+                            .setUserAgent(USER_AGENT)
+                            .setJavaScriptEnabled(true)
+                            .setIgnoreHTTPSErrors(true));
 
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-        for (int i = 0; i < events.size(); i += batchSize) {
-            int toIndex = Math.min(i + batchSize, events.size());
-            List<Event> subList = events.subList(i, toIndex);
-
-            int finalI = i;
-            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                try (var playwright = Playwright.create()) {
-                    var browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-                    var context = browser.newContext(
-                            new Browser.NewContextOptions()
-                                    .setUserAgent(USER_AGENT)
-                                    .setJavaScriptEnabled(true)
-                                    .setIgnoreHTTPSErrors(true));
-
-                    var page = context.newPage();
-                    int times = 1;
-                    for (Event it : subList) {
-                        List<MapSqlParameterSource> result = new ArrayList<>();
-                        log.info("Crawl odd for event (%d/%d) of index(%d-%d): ".formatted(
-                                times,
-                                subList.size(),
-                                finalI,
-                                toIndex
-                        ) + it.getEventName() + " - " + it.getEventDate());
-                        var bet = getBet(it.getDetailLink(), page);
-                        if (bet == null) {
-                            log.warning("Bet is null for event: " + it.getEventName());
-                            continue;
-                        }
-
-                        result.add(new MapSqlParameterSource()
-                                .addValue("event_id", it.getEventId())
-                                .addValue("odd_value", gson.toJson(bet.getOdds1x2()))
-                                .addValue("odd_type", "1x2"));
-
-                        result.add(new MapSqlParameterSource()
-                                .addValue("event_id", it.getEventId())
-                                .addValue("odd_value", gson.toJson(bet.getOddsHandicap()))
-                                .addValue("odd_type", "handicap"));
-
-                        result.add(new MapSqlParameterSource()
-                                .addValue("event_id", it.getEventId())
-                                .addValue("odd_value", gson.toJson(bet.getOddsGoal()))
-                                .addValue("odd_type", "goals"));
-
-                        result.add(new MapSqlParameterSource()
-                                .addValue("event_id", it.getEventId())
-                                .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
-                                .addValue("odd_type", "corners"));
-                        times++;
-                        var sqlInsert = """
-                                insert into odds(odd_type, odd_value, event_id) 
-                                values (:odd_type, :odd_value, :event_id)
-                                ON DUPLICATE KEY UPDATE
-                                    odd_value = :odd_value
-                                """;
-                        jdbcTemplate.batchUpdate(sqlInsert, result.toArray(new MapSqlParameterSource[0]));
-                        var sqlUpdate = "update events set number_updated = number_updated + 1 where event_id = :event_id";
-                        jdbcTemplate.update(sqlUpdate, new MapSqlParameterSource()
-                                .addValue("event_id", it.getEventId()));
-                        log.log(Level.INFO, "Crawl odd for event (%d/%d) of index(%d-%d): %s - %s".formatted(
-                                times,
-                                subList.size(),
-                                finalI,
-                                toIndex,
-                                it.getEventName(),
-                                it.getEventDate()
-                        ));
-                    }
-                    log.info("Crawl odd end of index" + finalI + "-" + toIndex + ": " + new Date());
-                    browser.close();
+            var page = context.newPage();
+            for (Event it : events) {
+                List<MapSqlParameterSource> result = new ArrayList<>();
+                var bet = getBet(it.getDetailLink(), page);
+                if (bet == null) {
+                    log.warning("Bet is null for event: " + it.getEventName());
+                    continue;
                 }
-            }, executor);
-            futures.add(future);
+
+                result.add(new MapSqlParameterSource()
+                        .addValue("event_id", it.getEventId())
+                        .addValue("odd_value", gson.toJson(bet.getOdds1x2()))
+                        .addValue("odd_type", "1x2"));
+
+                result.add(new MapSqlParameterSource()
+                        .addValue("event_id", it.getEventId())
+                        .addValue("odd_value", gson.toJson(bet.getOddsHandicap()))
+                        .addValue("odd_type", "handicap"));
+
+                result.add(new MapSqlParameterSource()
+                        .addValue("event_id", it.getEventId())
+                        .addValue("odd_value", gson.toJson(bet.getOddsGoal()))
+                        .addValue("odd_type", "goals"));
+
+                result.add(new MapSqlParameterSource()
+                        .addValue("event_id", it.getEventId())
+                        .addValue("odd_value", gson.toJson(bet.getOddsCorner()))
+                        .addValue("odd_type", "corners"));
+                var sqlInsert = """
+                        insert into odds(odd_type, odd_value, event_id) 
+                        values (:odd_type, :odd_value, :event_id)
+                        ON DUPLICATE KEY UPDATE
+                            odd_value = :odd_value
+                        """;
+                jdbcTemplate.batchUpdate(sqlInsert, result.toArray(new MapSqlParameterSource[0]));
+                var sqlUpdate = "update events set number_updated = number_updated + 1 where event_id = :event_id";
+                jdbcTemplate.update(sqlUpdate, new MapSqlParameterSource()
+                        .addValue("event_id", it.getEventId()));
+            }
+            browser.close();
         }
-
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        executor.shutdown();
     }
 
     private Bet getBet(String url, Page page) {

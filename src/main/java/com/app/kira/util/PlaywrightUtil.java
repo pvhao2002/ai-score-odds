@@ -1,0 +1,37 @@
+package com.app.kira.util;
+
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
+import lombok.experimental.UtilityClass;
+import lombok.extern.java.Log;
+
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.logging.Level;
+
+@Log
+@UtilityClass
+public class PlaywrightUtil {
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+
+    public <P> void withPlaywright(List<P> list, BiConsumer<Page, List<P>> logic) {
+        try (var playwright = Playwright.create()) {
+            var browser = playwright.chromium().launch(
+                    new BrowserType.LaunchOptions().setHeadless(false));
+            var context = browser.newContext(
+                    new Browser.NewContextOptions()
+                            .setUserAgent(USER_AGENT));
+
+            var page = context.newPage();
+            logic.accept(page, list);
+
+            page.close();
+            context.close();
+            browser.close();
+        } catch (Exception e) {
+            log.log(Level.WARNING, "Error during Playwright task", e);
+        }
+    }
+}

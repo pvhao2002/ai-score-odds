@@ -13,4 +13,6 @@ public class FilterOdd {
     String line;
     Double odd1; // over or home odds
     Double odd2; // under or away odds
+    String firstLine;
+    String lastLine;
 }

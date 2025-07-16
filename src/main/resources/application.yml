@@ -1,8 +1,3 @@
-server:
-  port: 2308
-  servlet:
-    context-path: /api
-
 application:
   datasource:
     read:
@@ -22,6 +17,11 @@ spring:
     multipart:
       max-file-size: 100MB
       max-request-size: 100MB
+
+server:
+  port: 2308
+  servlet:
+    context-path: /api
 
 logging:
   level:

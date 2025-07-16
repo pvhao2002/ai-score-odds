@@ -2,6 +2,7 @@ package com.app.kira.rest;
 
 import com.app.kira.dto.*;
 import com.app.kira.model.FilterOdd;
+import com.app.kira.server.ServerInfoService;
 import com.app.kira.util.OddConverter;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
@@ -10,6 +11,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 public class EventController {
     private double relativeError = 1.0 / 100; // 0.01% relative error for odds comparison
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final ServerInfoService serverInfoService;
 
     @GetMapping("relative-error")
     public Object getRelativeError() {
@@ -91,8 +94,10 @@ public class EventController {
                                    on odd_corner.event_id = ea.event_id and odd_corner.odd_type = 'corner' and odd_corner.open_odd = 1
                          left join kira_league kl on kl.league_id = ea.league_id
                 where true
-                  and (odd_hdc.line = :hdc_line or odd_hdc.home_line = :hdc_line or odd_hdc.away_line = :hdc_line)
-                  and odd_ou.line = :ou_line
+                      and ea.first_ou = :f_ou_line
+                      and ea.last_ou = :l_ou_line
+                      and ea.first_hdc = :f_hdc_line
+                      and ea.last_hdc = :l_hdc_line
                                 
                 order by kl.is_main desc
                        , ea.event_date desc
@@ -101,9 +106,11 @@ public class EventController {
         var param = new MapSqlParameterSource("re", relativeError);
         for (var r : request) {
             if ("ou".equalsIgnoreCase(r.getType())) {
-                param.addValue("ou_line", r.getLine());
+                param.addValue("f_ou_line", r.getFirstLine());
+                param.addValue("l_ou_line", r.getLastLine());
             } else {
-                param.addValue("hdc_line", r.getLine());
+                param.addValue("f_hdc_line", r.getFirstLine());
+                param.addValue("l_hdc_line", r.getLastLine());
             }
         }
         var data = namedParameterJdbcTemplate.query(sql, param, BeanPropertyRowMapper.newInstance(RawEventAnalyst.class))
@@ -111,8 +118,18 @@ public class EventController {
                 .map(EventFilterAnalystDTO::new)
                 .toList();
 
+        var scoreGroup = data.stream()
+                .collect(Collectors.groupingBy(EventFilterAnalystDTO::getFtScoreStr))
+                .entrySet()
+                .stream()
+                .map(ScoreSummary::new)
+                .sorted(Comparator.comparing(ScoreSummary::getCnt).reversed())
+                .toList();
+
         return Map.of(
                 "data", data
+                , "summary", new SummaryOddEventAnalyst(data, request)
+                , "scoreSummary", scoreGroup
         );
     }
 
