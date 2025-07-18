@@ -1,8 +1,9 @@
-package com.app.kira.service;
+package com.app.kira.schedule;
 
 import com.app.kira.model.EventDTO;
 import com.app.kira.model.EventResult;
 import com.app.kira.model.analyst.OddAnalyst;
+import com.app.kira.server.ServerInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -19,18 +20,21 @@ import java.util.stream.Collectors;
 @Log
 @Service
 @RequiredArgsConstructor
-public class OddService {
+public class OddSchedule {
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final ServerInfoService serverInfoService;
 
     @Transactional
-//    @Scheduled(fixedDelay = 500)
+    @Scheduled(fixedDelay = 1000, initialDelay = 10_000)
     public void calculateOdds() {
+        if (serverInfoService.isNotActive()) {
+            return;
+        }
         try {
             var sql = """
                     with oa as (SELECT oa.event_id
                                 FROM odd_analyst oa
                                 WHERE TRUE
-                                  AND odd_type IN ('hdc', '1x2', 'ou')
                                   AND odd_value <> '[]'
                                 GROUP BY oa.event_id
                                 HAVING COUNT(DISTINCT oa.odd_type) >= 3)
@@ -41,13 +45,13 @@ public class OddService {
                          , ea.event_date
                          , ea.league_name
                     from event_analyst ea
-                             inner join oa on oa.event_id = ea.id
+                             inner join oa on oa.event_id = ea.event_id
                              inner join odd_analyst oa2 on oa2.event_id = oa.event_id
                     where true
                       and (oa2.status = 'pending' or oa2.status = 'fail')
                     limit 120
-                    for update skip locked 
-                                   """;
+                    for update skip locked
+                     """;
             var result = jdbcTemplate.query(sql, (rs, i) -> new EventDTO(rs));
             if (result.isEmpty()) {
                 log.info("No odds to calculate");

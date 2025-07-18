@@ -3,7 +3,11 @@ package com.app.kira.util;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import lombok.experimental.UtilityClass;
+import lombok.extern.java.Log;
 
+import java.util.logging.Level;
+
+@Log
 @UtilityClass
 public class JsonUtil {
 
@@ -13,7 +17,7 @@ public class JsonUtil {
         try {
             return gson.fromJson(json, clazz);
         } catch (JsonSyntaxException e) {
-            System.err.println("Gson parsing error: " + e.getMessage());
+            log.log(Level.WARNING, "JsonUtil >> fromJson: Invalid JSON syntax: " + json, e);
             return null;
         }
     }
@@ -22,8 +26,8 @@ public class JsonUtil {
         try {
             return gson.toJson(obj);
         } catch (Exception e) {
-            System.err.println("Gson serialization error: " + e.getMessage());
-            return null;
+            log.log(Level.WARNING, "JsonUtil >> toJson: Error converting object to JSON: " + obj, e);
+            return "";
         }
     }
 }

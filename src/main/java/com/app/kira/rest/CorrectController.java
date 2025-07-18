@@ -25,27 +25,26 @@ public class CorrectController {
                 from event_analyst
                 """;
         var datas = jdbcTemplate.query(sql, BeanPropertyRowMapper.newInstance(CorrectDTO.class));
+        datas.forEach(e -> {
+            var minus = "-";
+            var ftScore = e.getFtScoreStr().split(minus);
+            var htScore = e.getHtScoreStr().split(minus);
+            var corner = e.getCornerStr().split(minus);
+
+            e.setFtHomeScore(Integer.parseInt(ftScore[0]));
+            e.setFtAwayScore(Integer.parseInt(ftScore[1]));
+
+            e.setHtHomeScore(Integer.parseInt(htScore[0]));
+            e.setHtAwayScore(Integer.parseInt(htScore[1]));
+
+            e.setCornerHome(Integer.parseInt(corner[0]));
+            e.setCornerAway(Integer.parseInt(corner[1]));
+
+            e.setFtTotalGoal(e.getFtHomeScore() + e.getFtAwayScore());
+            e.setHtTotalGoal(e.getHtHomeScore() + e.getHtAwayScore());
+            e.setTotalCorner(e.getCornerHome() + e.getCornerAway());
+        });
         var params = datas.stream()
-                .peek(e -> {
-                    // dau -
-                    var minus = "-";
-                    var ftScore = e.getFtScoreStr().split(minus);
-                    var htScore = e.getHtScoreStr().split(minus);
-                    var corner = e.getCornerStr().split(minus);
-
-                    e.setFtHomeScore(Integer.parseInt(ftScore[0]));
-                    e.setFtAwayScore(Integer.parseInt(ftScore[1]));
-
-                    e.setHtHomeScore(Integer.parseInt(htScore[0]));
-                    e.setHtAwayScore(Integer.parseInt(htScore[1]));
-
-                    e.setCornerHome(Integer.parseInt(corner[0]));
-                    e.setCornerAway(Integer.parseInt(corner[1]));
-
-                    e.setFtTotalGoal(e.getFtHomeScore() + e.getFtAwayScore());
-                    e.setHtTotalGoal(e.getHtHomeScore() + e.getHtAwayScore());
-                    e.setTotalCorner(e.getCornerHome() + e.getCornerAway());
-                })
                 .map(CorrectDTO::toParam)
                 .toArray(MapSqlParameterSource[]::new);
         jdbcTemplate.batchUpdate("""

@@ -1,10 +1,8 @@
 package com.app.kira.rest;
 
-import com.app.kira.model.EventHtml;
 import com.app.kira.util.DateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,25 +28,6 @@ public class AnalystController {
         var address = InetAddress.getLocalHost();
         var hostName = address.getHostName();
         return System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + hostName + " " + address.getHostAddress();
-    }
-
-    @GetMapping("update-score")
-    public Object updateScore() {
-        var sql = """
-                select id, ht_score_str, ft_score_str from event_analyst
-                """;
-        var events = jdbcTemplate.query(sql, BeanPropertyRowMapper.newInstance(EventHtml.class));
-        if (events.isEmpty()) {
-            return "No events found";
-        }
-        var params = events.stream()
-                .map(it -> {
-                    var p = new MapSqlParameterSource();
-                    p.addValue("id", it.getId());
-                    return p;
-                })
-                .toArray(MapSqlParameterSource[]::new);
-        return "OK";
     }
 
     @GetMapping("init")

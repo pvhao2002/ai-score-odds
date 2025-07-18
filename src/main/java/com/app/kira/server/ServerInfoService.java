@@ -29,7 +29,6 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
     private String hostName;
     @Getter
     private String ipAddress;
-    private final long version = System.currentTimeMillis();
     @Getter
     private String url;
     private final boolean localProfile;

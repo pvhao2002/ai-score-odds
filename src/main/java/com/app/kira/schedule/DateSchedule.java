@@ -13,6 +13,8 @@ import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,10 +74,27 @@ public class DateSchedule {
                 corner_str = values(corner_str),
                 link = values(link)
             """;
+    private static final String SQL_CRAWL_DATE = """
+            insert into crawl_date (date, status)
+                        values (:date, 'in_progress')
+                        on duplicate key update status     = %s,
+                                        created_at = current_timestamp
+            """;
+    private static final String SQL_INSERT_EVENT_CRAWL = """
+                INSERT INTO event_crawl(event_name, event_date, detail_link)
+                            VALUES (:event_name, :event_date, :detail_link)
+                            ON DUPLICATE KEY UPDATE
+                                detail_link = VALUES(detail_link),
+                                status      = 'pending'
+            """;
     private final ServerInfoService serverInfoService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Scheduled(fixedRate = 12 * 60 * 60 * 1000) // Runs every 12 hours
+    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Ho_Chi_Minh") // Every day at midnight
+    @Retryable(
+            retryFor = {Exception.class},
+            backoff = @Backoff(delay = 3_600_000) // delay 1 hour (3,600,000 milliseconds)
+    )
     @Transactional
     public void crawlByDate() {
         if (serverInfoService.isNotActive()) {
@@ -98,15 +117,9 @@ public class DateSchedule {
                 var date = it.getDate();
                 log.info(" crawlByDate for date: " + date);
                 var paramsDate = new MapSqlParameterSource("date", date);
-                var sqlCrawlDate = """
-                        insert into crawl_date (date, status)
-                        values (:date, 'in_progress')
-                        on duplicate key update status     = %s,
-                                        created_at = current_timestamp
-                        """;
                 var result = new ArrayList<EventHtml>();
                 try {
-                    jdbcTemplate.update(sqlCrawlDate.formatted("'in_progress'"), paramsDate);
+                    jdbcTemplate.update(SQL_CRAWL_DATE.formatted("'in_progress'"), paramsDate);
                     page.navigate(Constants.AI_SCORE_URL + "%s".formatted(date));
                     page.waitForSelector(
                             ".match-box",
@@ -122,7 +135,6 @@ public class DateSchedule {
                     int tries = 0;
 
                     while (tries < maxTries) {
-                        System.out.println("Crawl time: " + tries + ", number of events: " + result.size());
                         var pageSource = page.content();
                         var doc = Jsoup.parse(pageSource, Constants.AI_SCORE_URL);
                         var events = doc.select(".vue-recycle-scroller__item-view")
@@ -162,20 +174,11 @@ public class DateSchedule {
                     var params = result.stream()
                             .map(EventHtml::toMap)
                             .toArray(SqlParameterSource[]::new);
-                    jdbcTemplate.batchUpdate(
-                            """
-                                    INSERT INTO event_crawl(event_name, event_date, detail_link)
-                                    VALUES (:event_name, :event_date, :detail_link)
-                                    ON DUPLICATE KEY UPDATE
-                                        detail_link = VALUES(detail_link),
-                                        status      = 'pending'
-                                    """,
-                            params
-                    );
+                    jdbcTemplate.batchUpdate(SQL_INSERT_EVENT_CRAWL, params);
                     jdbcTemplate.batchUpdate(INSERT_SQL_EVENT_ANALYST, params);
                 } catch (Exception ex) {
                     log.log(Level.WARNING, "Error during analystDate", ex);
-                    jdbcTemplate.update(sqlCrawlDate.formatted("'failed'"), paramsDate);
+                    jdbcTemplate.update(SQL_CRAWL_DATE.formatted("'failed'"), paramsDate);
                 } finally {
                     log.info("Crawl analystDate for date: " + date + " done at " + new Date());
                     jdbcTemplate.update("""

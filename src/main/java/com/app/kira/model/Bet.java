@@ -4,9 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +30,28 @@ public class Bet {
     @Builder.Default
     private List<OddCorner> oddsCorner = new ArrayList<>();
 
+    public void cleanOdd() {
+        this.odds1x2 = this.odds1x2.stream()
+                .filter(odd -> StringUtils.isNotBlank(odd.get_1())
+                        && StringUtils.isNotBlank(odd.getX())
+                        && StringUtils.isNotBlank(odd.get_2()))
+                .toList();
+        this.oddsGoal = this.oddsGoal.stream()
+                .filter(odd -> StringUtils.isNotBlank(odd.getGoals())
+                        && StringUtils.isNotBlank(odd.getOver())
+                        && StringUtils.isNotBlank(odd.getUnder()))
+                .toList();
+        this.oddsHandicap = this.oddsHandicap.stream()
+                .filter(odd -> StringUtils.isNotBlank(odd.getHome())
+                        && StringUtils.isNotBlank(odd.getAway()))
+                .toList();
+        this.oddsCorner = this.oddsCorner.stream()
+                .filter(odd -> StringUtils.isNotBlank(odd.getCorner())
+                        && StringUtils.isNotBlank(odd.getOver())
+                        && StringUtils.isNotBlank(odd.getUnder()))
+                .toList();
+    }
+
     public String toResult() {
         var result = new StringBuilder();
 
@@ -48,7 +69,7 @@ public class Bet {
         result.append(line1x2);
         for (Odd1x2 odd : odds1x2) {
             result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n",
-                                        odd.getOddDate(), odd.get_1(), odd.getX(), odd.get_2()));
+                    odd.getOddDate(), odd.get_1(), odd.getX(), odd.get_2()));
         }
         result.append(line1x2).append("\n");
 
@@ -58,7 +79,7 @@ public class Bet {
         result.append(line1x2);
         for (OddGoal odd : oddsGoal) {
             result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n",
-                                        odd.getOddDate(), odd.getGoals(), odd.getOver(), odd.getUnder()));
+                    odd.getOddDate(), odd.getGoals(), odd.getOver(), odd.getUnder()));
         }
         result.append(line1x2).append("\n");
 
@@ -68,7 +89,7 @@ public class Bet {
         result.append(lineHandicap);
         for (OddHandicap odd : oddsHandicap) {
             result.append(String.format("| %-40s | %-15s | %-15s |\n",
-                                        odd.getOddDate(), odd.getHome(), odd.getAway()));
+                    odd.getOddDate(), odd.getHome(), odd.getAway()));
         }
         result.append(lineHandicap).append("\n");
 
@@ -78,7 +99,7 @@ public class Bet {
         result.append(line1x2);
         for (OddCorner odd : oddsCorner) {
             result.append(String.format("| %-40s | %-15s | %-15s | %-15s |\n",
-                                        odd.getOddDate(), odd.getCorner(), odd.getOver(), odd.getUnder()));
+                    odd.getOddDate(), odd.getCorner(), odd.getOver(), odd.getUnder()));
         }
         result.append(line1x2);
 

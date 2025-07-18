@@ -1,9 +1,6 @@
 package com.app.kira.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.util.List;
@@ -13,6 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE)
+@EqualsAndHashCode(callSuper = true)
 public class RawEventAnalyst extends BaseEventAnalystDTO {
     String oddTypeHdc;
     String lineHdc;

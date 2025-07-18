@@ -17,7 +17,14 @@ spring:
     multipart:
       max-file-size: 100MB
       max-request-size: 100MB
-
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    shutdown:
+      enabled: false
 server:
   port: 2308
   servlet:

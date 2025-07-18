@@ -12,13 +12,14 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE)
+@EqualsAndHashCode(callSuper = true)
 public class EventFilterAnalystDTO extends BaseEventAnalystDTO {
     @JsonIgnore
-    private final String ICON_UP = """
+    private static final String ICON_UP = """
             <i class="fa-solid fa-up-long"></i>
             """;
     @JsonIgnore
-    private final String ICON_DOWN = """
+    private static final String ICON_DOWN = """
             <i class="fa-solid fa-down-long"></i>
             """;
     String homeLineHdcMovement;

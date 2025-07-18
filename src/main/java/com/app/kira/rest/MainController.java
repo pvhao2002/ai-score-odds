@@ -2,6 +2,7 @@ package com.app.kira.rest;
 
 import com.app.kira.model.*;
 import com.app.kira.util.DateUtil;
+import com.app.kira.util.PlaywrightUtil;
 import com.google.gson.Gson;
 import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
@@ -80,6 +81,12 @@ public class MainController {
                         
             Reasoning:
             """;
+
+    @GetMapping("switch-headless")
+    public Object updateHeadless(@RequestParam(required = false, defaultValue = "false") Boolean isHeadless) {
+        PlaywrightUtil.updateHeadless(isHeadless);
+        return "Playwright headless mode updated to: " + isHeadless;
+    }
 
     @GetMapping(value = "under", produces = MediaType.TEXT_PLAIN_VALUE)
     public Object under(@RequestParam(required = false, defaultValue = "1") String mode) {

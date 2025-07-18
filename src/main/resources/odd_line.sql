@@ -23,8 +23,7 @@ UPDATE event_analyst ea
                 WHERE odd_type = 'hdc') ranked
           GROUP BY event_id) t ON t.event_id = ea.event_id
 SET ea.home_line_movement = t.home_line_movement,
-    ea.away_line_movement = t.away_line_movement
-where ea.home_line_movement is null or ea.away_line_movement is null;
+    ea.away_line_movement = t.away_line_movement;
 
 UPDATE event_analyst ea
     JOIN (SELECT event_id,
@@ -51,8 +50,7 @@ UPDATE event_analyst ea
                 WHERE odd_type = 'ou') ranked
           GROUP BY event_id) t ON t.event_id = ea.event_id
 SET ea.over_line_movement  = t.ou_trend,
-    ea.under_line_movement = t.under_trend
-where ea.over_line_movement is null or ea.under_line_movement is null;
+    ea.under_line_movement = t.under_trend;
 
 
 update event_analyst ea
@@ -135,16 +133,4 @@ set ea.first_home_odds  = IFNULL(ea.first_home_odds, home_odd.first_home_odds),
     ea.first_ou         = IFNULL(ea.first_ou, ou.first_ou),
     ea.last_ou          = IFNULL(ea.last_ou, ou.last_ou),
     ea.first_hdc        = IFNULL(ea.first_hdc, hdc.first_hdc),
-    ea.last_hdc         = IFNULL(ea.last_hdc, hdc.last_hdc)
-where ea.first_home_odds is null
-   or ea.last_home_odds is null
-   or ea.first_away_odds is null
-   or ea.last_away_odds is null
-   or ea.first_over_odds is null
-   or ea.last_over_odds is null
-   or ea.first_under_odds is null
-   or ea.last_under_odds is null
-   or ea.first_ou is null
-   or ea.last_ou is null
-   or ea.first_hdc is null
-   or ea.last_hdc is null
+    ea.last_hdc         = IFNULL(ea.last_hdc, hdc.last_hdc);

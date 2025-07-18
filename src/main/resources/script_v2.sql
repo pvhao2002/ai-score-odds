@@ -157,3 +157,14 @@ create table router_setting
     is_active        tinyint(1) default 0,
     last_update      datetime   default current_timestamp on update current_timestamp
 );
+
+create table pc
+(
+    pc_id    int auto_increment
+        primary key,
+    pc_name  varchar(255) null,
+    event_id int          null,
+    message  text         null,
+    status   varchar(50)  null,
+    index pc_name (pc_name, event_id)
+);

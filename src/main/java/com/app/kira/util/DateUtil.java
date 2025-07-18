@@ -1,42 +1,46 @@
 package com.app.kira.util;
 
 import lombok.experimental.UtilityClass;
+import lombok.extern.java.Log;
 import org.apache.commons.lang3.StringUtils;
 
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.logging.Level;
 
+@Log
 @UtilityClass
 public class DateUtil {
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("h:mm a dd-MM-yyyy");
-    private static final DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd");
-    private static final DateTimeFormatter formatter3 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String DATE_FORMAT_CRAWL = "yyyyMMdd";
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("h:mm a dd-MM-yyyy");
+    private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd");
+    private static final DateTimeFormatter FORMATTER3 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern(DATE_FORMAT_CRAWL);
 
-    private static final DateTimeFormatter FORMATTER2 = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter FORMATTER_WITHOUT_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public String currentDateNow() {
-        return LocalDateTime.now().format(formatter3);
+        return LocalDateTime.now().format(FORMATTER3);
     }
 
     public String next12Hours() {
-        return LocalDateTime.now().plusHours(12).format(formatter3);
+        return LocalDateTime.now().plusHours(12).format(FORMATTER3);
     }
 
     public String next7Days() {
-        return LocalDateTime.now().plusDays(7).format(formatter3);
+        return LocalDateTime.now().plusDays(7).format(FORMATTER3);
     }
 
     public static String convertFormater1ToFormater2(String date) {
         LocalDate localDate = LocalDate.parse(date, FORMATTER1);
-        return localDate.format(FORMATTER2);
+        return localDate.format(FORMATTER_WITHOUT_TIME);
     }
 
     public static String getTodayDate() {
-        return getTodayDate("yyyyMMdd");
+        return getTodayDate(DATE_FORMAT_CRAWL);
     }
 
     public static String getTodayDate(String pattern) {
@@ -45,7 +49,7 @@ public class DateUtil {
     }
 
     public static String getTomorrowDate() {
-        return getTomorrowDate("yyyyMMdd");
+        return getTomorrowDate(DATE_FORMAT_CRAWL);
     }
 
     public static String getDate(String pattern, LocalDate date) {
@@ -55,19 +59,20 @@ public class DateUtil {
     public static String getDateForDB(String date) {
         if (StringUtils.isBlank(date)) return "";
         List<DateTimeFormatter> formatters = List.of(
-                formatter,
-                formatter2
+                FORMATTER,
+                FORMATTER_WITH_TIME_MINUTES
         );
         LocalDateTime dateTime = null;
-        for (DateTimeFormatter formatter : formatters) {
+        for (DateTimeFormatter fmt : formatters) {
             try {
-                dateTime = LocalDateTime.parse(date, formatter);
-            } catch (Exception ignored) {
+                dateTime = LocalDateTime.parse(date, fmt);
+            } catch (Exception exp) {
+                log.log(Level.WARNING, "Failed to parse date: " + date + " with formatter: " + fmt, exp);
             }
         }
         return dateTime == null
                 ? ""
-                : dateTime.format(formatter3);
+                : dateTime.format(FORMATTER3);
     }
 
     public static String getTomorrowDate(String pattern) {
@@ -77,10 +82,10 @@ public class DateUtil {
 
     public LocalDateTime parseDate(String date) {
         try {
-            return LocalDateTime.parse(date, formatter);
+            return LocalDateTime.parse(date, FORMATTER);
         } catch (Exception e) {
             try {
-                return LocalDateTime.parse(date, formatter2);
+                return LocalDateTime.parse(date, FORMATTER_WITH_TIME_MINUTES);
             } catch (Exception ex) {
                 return LocalDateTime.parse(date);
             }
@@ -97,10 +102,11 @@ public class DateUtil {
     }
 
     public LocalDateTime parseOddDate(String oddDate, LocalDateTime defaultDate) {
-        for (DateTimeFormatter formatter : FORMATTERS) {
+        for (DateTimeFormatter fmt : FORMATTERS) {
             try {
-                return LocalDateTime.parse(oddDate, formatter);
-            } catch (Exception ignored) {
+                return LocalDateTime.parse(oddDate, fmt);
+            } catch (Exception exp) {
+                log.log(Level.WARNING, "Failed to parse odd date: " + oddDate + " with formatter: " + fmt, exp);
             }
         }
         return defaultDate;
@@ -110,14 +116,10 @@ public class DateUtil {
         try {
             OffsetDateTime offsetDateTime = OffsetDateTime.parse(isoDateTime);
             ZonedDateTime gmt7Time = offsetDateTime.atZoneSameInstant(ZoneId.of("Asia/Ho_Chi_Minh"));
-            return gmt7Time.toLocalDateTime().format(formatter3); // formatter3 = "yyyy-MM-dd HH:mm:ss"
+            return gmt7Time.toLocalDateTime().format(FORMATTER3); // formatter3 = "yyyy-MM-dd HH:mm:ss"
         } catch (Exception e) {
             return null; // hoặc ném lỗi tùy vào use-case
         }
-    }
-
-    public static void main(String[] args) {
-        System.out.println(getDateForDB("1:00 AM 2025-06-01"));
     }
 }
 
