@@ -17,11 +17,11 @@ import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @Log
 public class ServerInfoService implements ApplicationListener<WebServerInitializedEvent> {
-    private static final String MODULE_KEY = "module";
     @Value("${server.servlet.context-path}")
     private String module;
     @Getter
@@ -73,6 +73,17 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
         );
     }
 
+    public boolean isScheduledMethodActive(String methodName) {
+        var sql = "select status from schedule_manager where schedule_name = :schedule_name and host_name = :host_name";
+        var params = Map.of(
+                "schedule_name", methodName,
+                "host_name", hostName
+        );
+        return Optional.of(db.queryForObject(sql, params, String.class))
+                .map("active"::equalsIgnoreCase)
+                .orElse(false);
+    }
+
     public void listScheduledMethods() {
         String[] beanNames = ApplicationContextProvider.getBeanDefinitionNames();
         for (String beanName : beanNames) {
@@ -83,7 +94,7 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
             for (Method method : methods) {
                 if (method.isAnnotationPresent(Scheduled.class)) {
                     var name = simplifyMethod(targetClass, method);
-                    var sql = "insert into schedule_manager(schedule_name, host_name) VALUES (:schedule_name, :host_name)";
+                    var sql = "insert ignore into schedule_manager(schedule_name, host_name) VALUES (:schedule_name, :host_name)";
                     var params = Map.of(
                             "schedule_name", name,
                             "host_name", hostName

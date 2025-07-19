@@ -3,7 +3,6 @@ package com.app.kira.schedule;
 import com.app.kira.model.EventDTO;
 import com.app.kira.model.EventResult;
 import com.app.kira.model.analyst.OddAnalyst;
-import com.app.kira.server.ServerInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -70,14 +69,10 @@ public class OddSchedule {
                                     under_odds = values(under_odds)
             """;
     private final NamedParameterJdbcTemplate jdbcTemplate;
-    private final ServerInfoService serverInfoService;
 
     @Transactional
     @Scheduled(fixedDelay = 3, initialDelay = 10, timeUnit = TimeUnit.SECONDS)
     public void calculateOdds() {
-        if (serverInfoService.isNotActive()) {
-            return;
-        }
         var result = jdbcTemplate.query(SQL_GET_EVENT_AND_ODD, (rs, i) -> new EventDTO(rs));
         if (result.isEmpty()) {
             log.info("No odds to calculate");
@@ -85,14 +80,7 @@ public class OddSchedule {
         }
         result.stream()
                 .collect(Collectors.groupingBy(EventDTO::getEventId))
-                .forEach((k, v) -> {
-                    System.out.println("Processing event: " + k);
-                    try {
-                        Thread.sleep(100_000);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                .forEach(this::processEvent);
     }
 
     private void processEvent(Long key, List<EventDTO> value) {

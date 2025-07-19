@@ -6,7 +6,7 @@ CREATE EVENT IF NOT EXISTS insert_crawl_date_daily
         INSERT IGNORE INTO crawl_date(date)
         WITH RECURSIVE date_series
                            AS (SELECT COALESCE(DATE_ADD(MAX(event_date), INTERVAL 1 DAY),
-                                               DATE('2025-01-01')) AS date_val
+                                               DATE('2024-08-01')) AS date_val
                                FROM event_analyst
 
                                UNION ALL
@@ -18,3 +18,4 @@ CREATE EVENT IF NOT EXISTS insert_crawl_date_daily
         FROM date_series
         WHERE NOT EXISTS (SELECT 1 FROM crawl_date c WHERE c.date = DATE_FORMAT(date_val, '%Y%m%d'));
     END;
+

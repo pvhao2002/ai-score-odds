@@ -2,7 +2,6 @@ package com.app.kira.schedule;
 
 import com.app.kira.model.EventHtml;
 import com.app.kira.model.analyst.CrawlDate;
-import com.app.kira.server.ServerInfoService;
 import com.app.kira.util.Constants;
 import com.app.kira.util.PlaywrightUtil;
 import com.microsoft.playwright.Page;
@@ -13,8 +12,6 @@ import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 @Log
@@ -87,23 +85,17 @@ public class DateSchedule {
                                 detail_link = VALUES(detail_link),
                                 status      = 'pending'
             """;
-    private final ServerInfoService serverInfoService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Ho_Chi_Minh") // Every day at midnight
-    @Retryable(
-            retryFor = {Exception.class},
-            backoff = @Backoff(delay = 3_600_000) // delay 1 hour (3,600,000 milliseconds)
-    )
+//    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Ho_Chi_Minh") // Every day at midnight
+    @Scheduled(fixedDelay = 2, initialDelay = 1, timeUnit = TimeUnit.MINUTES)
     @Transactional
     public void crawlByDate() {
-        if (serverInfoService.isNotActive()) {
-            return;
-        }
         var sql = """
                 select *
                 from crawl_date
                 where status = 'PENDING' OR status = 'FAILED'
+                LIMIT 10
                 for update
                 skip locked
                 """;

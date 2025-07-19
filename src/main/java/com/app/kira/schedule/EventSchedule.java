@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -50,12 +51,9 @@ public class EventSchedule {
     private final ServerInfoService serverInfoService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Scheduled(fixedDelay = 60 * 1000)
+    @Scheduled(fixedDelay = 60, timeUnit = TimeUnit.SECONDS, initialDelay = 10)
     @Transactional
     public void event() {
-        if (serverInfoService.isNotActive()) {
-            return;
-        }
         var sqlEvents = """
                 select id,
                        event_name,
