@@ -1,22 +1,21 @@
 package com.app.kira.server;
 
+import com.app.kira.spring.ApplicationContextProvider;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import lombok.*;
+import lombok.Getter;
+import lombok.NonNull;
 import lombok.extern.java.Log;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
-import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
+import java.lang.reflect.Method;
 import java.util.Map;
 
 @Service
@@ -31,13 +30,11 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
     private String ipAddress;
     @Getter
     private String url;
-    private final boolean localProfile;
     private final NamedParameterJdbcTemplate db;
 
 
-    public ServerInfoService(JdbcTemplate db, Environment environment) {
+    public ServerInfoService(JdbcTemplate db) {
         this.db = new NamedParameterJdbcTemplate(db);
-        this.localProfile = Arrays.stream(environment.getActiveProfiles()).anyMatch(it -> List.of("dev", "local", "forceActive").contains(it));
     }
 
     @PostConstruct
@@ -53,16 +50,9 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
 
     @Override
     public void onApplicationEvent(@NonNull WebServerInitializedEvent event) {
-        if (this.localProfile) {
-            return;
-        }
         this.url = "http://" + ipAddress + ":" + event.getWebServer().getPort() + module;
         saveServerInfo();
-    }
-
-    @Scheduled(fixedDelay = 3 * 60 * 1000, initialDelay = 60 * 1000)
-    void removeInactiveNode() {
-
+        listScheduledMethods();
     }
 
     void saveServerInfo() {
@@ -83,22 +73,33 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
         );
     }
 
-    public boolean isNotActive() {
-        return !isActive();
+    public void listScheduledMethods() {
+        String[] beanNames = ApplicationContextProvider.getBeanDefinitionNames();
+        for (String beanName : beanNames) {
+            Object bean = ApplicationContextProvider.getBean(beanName);
+            Class<?> targetClass = AopUtils.getTargetClass(bean);
+
+            Method[] methods = targetClass.getDeclaredMethods();
+            for (Method method : methods) {
+                if (method.isAnnotationPresent(Scheduled.class)) {
+                    var name = simplifyMethod(targetClass, method);
+                    var sql = "insert into schedule_manager(schedule_name, host_name) VALUES (:schedule_name, :host_name)";
+                    var params = Map.of(
+                            "schedule_name", name,
+                            "host_name", hostName
+                    );
+                    db.update(sql, params);
+                }
+            }
+        }
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ServerActive {
-        private int lastActiveMin;
-        private String node;
-        private String module;
 
-        public ServerActive(ResultSet rs) throws SQLException {
-            this.lastActiveMin = rs.getInt("last_update_time");
-            this.node = rs.getString("node");
-            this.module = rs.getString(MODULE_KEY);
-        }
+    private String simplifyMethod(Class<?> targetClass, Method method) {
+        return String.format("%s.%s", targetClass.getPackageName(), method.getName());
+    }
+
+    public boolean isNotActive() {
+        return !isActive();
     }
 }

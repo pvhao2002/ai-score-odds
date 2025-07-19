@@ -168,3 +168,13 @@ create table pc
     status   varchar(50)  null,
     index pc_name (pc_name, event_id)
 );
+
+drop table if exists schedule_manager;
+create table schedule_manager
+(
+    schedule_name varchar(255),
+    host_name     varchar(255),
+    status        enum ('active', 'inactive') default 'inactive',
+    last_update   timestamp                   default current_timestamp on update current_timestamp,
+    primary key (schedule_name, host_name)
+);
