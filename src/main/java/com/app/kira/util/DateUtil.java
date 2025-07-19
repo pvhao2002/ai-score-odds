@@ -15,8 +15,8 @@ import java.util.logging.Level;
 public class DateUtil {
     private static final String DATE_FORMAT_CRAWL = "yyyyMMdd";
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("h:mm a dd-MM-yyyy");
-    private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd");
-    private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES_V2 = DateTimeFormatter.ofPattern("hh:mm a yyyy-MM-dd");
+    private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd", Locale.ENGLISH);
+    private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES_V2 = DateTimeFormatter.ofPattern("hh:mm a yyyy-MM-dd", Locale.ENGLISH);
     private static final DateTimeFormatter FORMATTER3 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern(DATE_FORMAT_CRAWL);
