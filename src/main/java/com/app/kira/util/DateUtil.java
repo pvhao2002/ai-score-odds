@@ -16,6 +16,7 @@ public class DateUtil {
     private static final String DATE_FORMAT_CRAWL = "yyyyMMdd";
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("h:mm a dd-MM-yyyy");
     private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd");
+    private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES_V2 = DateTimeFormatter.ofPattern("hh:mm a yyyy-MM-dd");
     private static final DateTimeFormatter FORMATTER3 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern(DATE_FORMAT_CRAWL);
@@ -87,7 +88,7 @@ public class DateUtil {
             try {
                 return LocalDateTime.parse(date, FORMATTER_WITH_TIME_MINUTES);
             } catch (Exception ex) {
-                return LocalDateTime.parse(date);
+                return LocalDateTime.parse(date, FORMATTER_WITH_TIME_MINUTES_V2);
             }
         }
     }
