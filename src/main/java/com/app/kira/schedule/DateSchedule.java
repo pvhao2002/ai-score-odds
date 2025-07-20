@@ -74,8 +74,8 @@ public class DateSchedule {
             """;
     private static final String SQL_CRAWL_DATE = """
             insert into crawl_date (date, status)
-                        values (:date, 'in_progress')
-                        on duplicate key update status     = %s,
+                        values (:date, :status)
+                        on duplicate key update status     = values(status),
                                         created_at = current_timestamp
             """;
     private static final String SQL_INSERT_EVENT_CRAWL = """
@@ -87,7 +87,7 @@ public class DateSchedule {
             """;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-//    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Ho_Chi_Minh") // Every day at midnight
+    //    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Ho_Chi_Minh") // Every day at midnight
     @Scheduled(fixedDelay = 2, initialDelay = 1, timeUnit = TimeUnit.MINUTES)
     @Transactional
     public void crawlByDate() {
@@ -111,7 +111,7 @@ public class DateSchedule {
                 var paramsDate = new MapSqlParameterSource("date", date);
                 var result = new ArrayList<EventHtml>();
                 try {
-                    jdbcTemplate.update(SQL_CRAWL_DATE.formatted("'in_progress'"), paramsDate);
+                    jdbcTemplate.update(SQL_CRAWL_DATE, paramsDate.addValue("status", "in_progress"));
                     page.navigate(Constants.AI_SCORE_URL + "%s".formatted(date));
                     page.waitForSelector(
                             ".match-box",
@@ -170,7 +170,7 @@ public class DateSchedule {
                     jdbcTemplate.batchUpdate(INSERT_SQL_EVENT_ANALYST, params);
                 } catch (Exception ex) {
                     log.log(Level.WARNING, "Error during analystDate", ex);
-                    jdbcTemplate.update(SQL_CRAWL_DATE.formatted("'failed'"), paramsDate);
+                    jdbcTemplate.update(SQL_CRAWL_DATE, paramsDate.addValue("status", "failed"));
                 } finally {
                     log.info("Crawl analystDate for date: " + date + " done at " + new Date());
                     jdbcTemplate.update("""

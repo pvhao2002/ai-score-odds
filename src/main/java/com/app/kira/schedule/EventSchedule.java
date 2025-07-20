@@ -81,6 +81,7 @@ public class EventSchedule {
                 );
                 page.navigate(event.getDetailLink() + "/odds");
                 page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(30_000));
+                page.waitForTimeout(3_500);
                 var lookBoxes = page.querySelectorAll(".lookBox.brb");
                 if (!lookBoxes.isEmpty()) {
                     lookBoxes.getFirst().click();
