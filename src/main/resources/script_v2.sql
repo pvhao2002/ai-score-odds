@@ -23,7 +23,7 @@ create table if not exists `event_crawl`
 drop table if exists event_analyst;
 create table event_analyst
 (
-    id              int not null auto_increment primary key,
+    event_id              int not null auto_increment primary key,
     event_name      varchar(255),
     home_team       varchar(255),
     away_team       varchar(255),

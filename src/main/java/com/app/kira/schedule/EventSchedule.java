@@ -152,7 +152,7 @@ public class EventSchedule {
                 .stream()
                 .map(r -> rowMapper.apply(r.select("td")))
                 .filter(Objects::nonNull)
-                .filter(it -> !it.getOddDate().contains("'"))
+                .filter(it -> !it.getOddDate().contains("'") || !it.getOddDate().contains("HT"))
                 .filter(it -> DateUtil.parseOddDate(it.getOddDate(), null) != null)
                 .sorted(Comparator.comparing((T o) -> DateUtil.parseOddDate(o.getOddDate())).reversed())
                 .toList();

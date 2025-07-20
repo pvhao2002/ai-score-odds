@@ -82,15 +82,31 @@ public class DateUtil {
     }
 
     public LocalDateTime parseDate(String date) {
-        try {
-            return LocalDateTime.parse(date, FORMATTER);
-        } catch (Exception e) {
+        var fmts = List.of(
+                FORMATTER,
+                FORMATTER_WITH_TIME_MINUTES,
+                FORMATTER_WITH_TIME_MINUTES_V2
+        );
+        if (StringUtils.isBlank(date)) {
+            return null;
+        }
+        if (date.length() < 10) {
+            log.warning("Date string is too short: " + date);
+            return null;
+        }
+        if (date.length() > 20) {
+            log.warning("Date string is too long: " + date);
+            return null;
+        }
+        for (DateTimeFormatter fmt : fmts) {
             try {
-                return LocalDateTime.parse(date, FORMATTER_WITH_TIME_MINUTES);
-            } catch (Exception ex) {
-                return LocalDateTime.parse(date, FORMATTER_WITH_TIME_MINUTES_V2);
+                return LocalDateTime.parse(date, fmt);
+            } catch (Exception exp) {
+                log.log(Level.WARNING, "Failed to parse date: " + date + " with formatter: " + fmt, exp);
             }
         }
+        log.warning("Failed to parse date: " + date + " with all formatters");
+        return null;
     }
 
     private static final List<DateTimeFormatter> FORMATTERS = List.of(
