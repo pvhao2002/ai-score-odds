@@ -7,8 +7,7 @@ application:
       driver-class-name: com.mysql.cj.jdbc.Driver
       maximum-pool-size: 30
       max-lifetime: 300000
-      idle-timeout: 300000
-      keepalive-time: 300000
+      keepalive-time: 30000
 spring:
   servlet:
     multipart:
