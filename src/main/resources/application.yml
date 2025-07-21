@@ -1,17 +1,16 @@
 application:
   datasource:
-    read:
-      jdbc-url: "jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:kira}?useUnicode=true&createDatabaseIfNotExist=true"
-      username: "${DB_USERNAME:root}"
-      password: "${DB_PASSWORD:1234}"
-      driver-class-name: com.mysql.cj.jdbc.Driver
-      maximum-pool-size: 20
     write:
       jdbc-url: "jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:kira}?useUnicode=true&createDatabaseIfNotExist=true"
       username: "${DB_USERNAME:root}"
       password: "${DB_PASSWORD:1234}"
       driver-class-name: com.mysql.cj.jdbc.Driver
-      maximum-pool-size: 20
+      maximum-pool-size: 4
+      max-lifetime: 1500000
+      idle-timeout: 600000
+      validation-timeout: 3000
+      connection-timeout: 30000
+      keepalive-time: 300000
 spring:
   servlet:
     multipart:

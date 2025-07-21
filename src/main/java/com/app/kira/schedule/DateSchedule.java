@@ -159,7 +159,7 @@ public class DateSchedule {
                             break;
                         }
                         page.evaluate("window.scrollBy(0, %d)".formatted(scrollStep));
-                        page.waitForTimeout(5_000);
+                        page.waitForTimeout(1_000);
                         previousHeight += scrollStep;
                         tries++;
                     }

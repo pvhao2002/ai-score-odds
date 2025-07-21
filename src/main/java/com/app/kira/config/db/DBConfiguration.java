@@ -18,24 +18,12 @@ import javax.sql.DataSource;
 @EnableTransactionManagement
 public class DBConfiguration {
 
-    @Bean
-    @ReadDB
-    @ConfigurationProperties(prefix = "application.datasource.read")
-    public HikariConfig readHikariConfig() {
-        return new HikariConfig();
-    }
 
     @Bean
     @WriteDB
     @ConfigurationProperties(prefix = "application.datasource.write")
     public HikariConfig writeHikariConfig() {
         return new HikariConfig();
-    }
-
-    @Bean
-    @ReadDB
-    public DataSource readDataSource(@ReadDB HikariConfig config) {
-        return getDataSource(config);
     }
 
     @Bean
@@ -49,12 +37,6 @@ public class DBConfiguration {
     }
 
     @Bean
-    @ReadDB
-    public JdbcTemplate readJdbcTemplate(@ReadDB DataSource ds) {
-        return new JdbcTemplate(ds);
-    }
-
-    @Bean
     @WriteDB
     @Primary
     public JdbcTemplate writeJdbcTemplate(@WriteDB DataSource ds) {
@@ -62,22 +44,10 @@ public class DBConfiguration {
     }
 
     @Bean
-    @ReadDB
-    public NamedParameterJdbcTemplate readNamedParameterJdbcTemplate(@ReadDB DataSource ds) {
-        return new NamedParameterJdbcTemplate(this.readJdbcTemplate(ds));
-    }
-
-    @Bean
     @WriteDB
     @Primary
     public NamedParameterJdbcTemplate writeNamedParameterJdbcTemplate(@WriteDB DataSource ds) {
         return new NamedParameterJdbcTemplate(this.writeJdbcTemplate(ds));
-    }
-
-    @Bean
-    @ReadDB
-    public JdbcClient readJdbcClient(@ReadDB DataSource ds) {
-        return JdbcClient.create(ds);
     }
 
     @Bean

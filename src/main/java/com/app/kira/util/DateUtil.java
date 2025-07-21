@@ -14,9 +14,12 @@ import java.util.logging.Level;
 @UtilityClass
 public class DateUtil {
     private static final String DATE_FORMAT_CRAWL = "yyyyMMdd";
+
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("h:mm a dd-MM-yyyy");
     private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES = DateTimeFormatter.ofPattern("h:mm a yyyy-MM-dd", Locale.ENGLISH);
     private static final DateTimeFormatter FORMATTER_WITH_TIME_MINUTES_V2 = DateTimeFormatter.ofPattern("hh:mm a yyyy-MM-dd", Locale.ENGLISH);
+
+
     private static final DateTimeFormatter FORMATTER3 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static final DateTimeFormatter FORMATTER1 = DateTimeFormatter.ofPattern(DATE_FORMAT_CRAWL);
@@ -94,15 +97,14 @@ public class DateUtil {
             log.warning("Date string is too short: " + date);
             return null;
         }
-        if (date.length() > 20) {
+        if (date.length() > 25) {
             log.warning("Date string is too long: " + date);
             return null;
         }
         for (DateTimeFormatter fmt : fmts) {
             try {
                 return LocalDateTime.parse(date, fmt);
-            } catch (Exception exp) {
-                log.log(Level.WARNING, "Failed to parse date: " + date + " with formatter: " + fmt, exp);
+            } catch (Exception ignore) {
             }
         }
         log.warning("Failed to parse date: " + date + " with all formatters");
