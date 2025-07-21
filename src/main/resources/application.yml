@@ -5,11 +5,9 @@ application:
       username: "${DB_USERNAME:root}"
       password: "${DB_PASSWORD:1234}"
       driver-class-name: com.mysql.cj.jdbc.Driver
-      maximum-pool-size: 4
-      max-lifetime: 1500000
-      idle-timeout: 600000
-      validation-timeout: 3000
-      connection-timeout: 30000
+      maximum-pool-size: 30
+      max-lifetime: 300000
+      idle-timeout: 300000
       keepalive-time: 300000
 spring:
   servlet:
