@@ -1,11 +1,15 @@
 package com.app.kira.util;
 
+import com.app.kira.server.ServerInfoService;
+import com.app.kira.spring.ApplicationContextProvider;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.options.Proxy;
 import lombok.experimental.UtilityClass;
 import lombok.extern.java.Log;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -15,7 +19,9 @@ import java.util.logging.Level;
 @UtilityClass
 public class PlaywrightUtil {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+    private static final ServerInfoService SERVER_BEAN = ApplicationContextProvider.getBean(ServerInfoService.class);
     private boolean isHeadless = true;
+    private boolean isUseProxy = true;
 
     public <P> void withPlaywright(List<P> list, BiConsumer<Page, List<P>> logic) {
         try (var playwright = Playwright.create()) {

@@ -34,6 +34,7 @@ import java.io.*;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,7 +48,6 @@ public class MainController {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final Gson gson = new Gson();
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
-    private static final int BROWSER_POOL_SIZE = 5;
 
     private final String PROMPT = """
             I will provide a list of upcoming football matches below.
@@ -84,8 +84,23 @@ public class MainController {
 
     @GetMapping("switch-headless")
     public Object updateHeadless(@RequestParam(required = false, defaultValue = "false") Boolean isHeadless) {
-        PlaywrightUtil.updateHeadless(isHeadless);
-        return "Playwright headless mode updated to: " + isHeadless;
+        return "Playwright headless mode updated to: " + PlaywrightUtil.updateHeadless(isHeadless);
+    }
+
+    @GetMapping("check-playwright")
+    public Object checkPlayWright() {
+        log.info("Checking Playwright...");
+        AtomicReference<String> doc = new AtomicReference<>();
+        PlaywrightUtil.withPlaywright(Collections.emptyList(), (page, list) -> {
+            page.navigate("https://gologin.com/vi/free-proxy/", new Page.NavigateOptions().setTimeout(30_000));
+            page.waitForTimeout(2_000);
+            var pageSource = page.content();
+            var document = Jsoup.parse(pageSource, "https://gologin.com");
+            // remove script tags
+            document.select("script").remove();
+            doc.set(document.html());
+        });
+        return doc.get();
     }
 
     @GetMapping(value = "under", produces = MediaType.TEXT_PLAIN_VALUE)

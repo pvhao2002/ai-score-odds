@@ -1,6 +1,8 @@
 package com.app.kira.server;
 
+import com.app.kira.dto.predict.ProxyDTO;
 import com.app.kira.spring.ApplicationContextProvider;
+import com.microsoft.playwright.options.Proxy;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.Getter;
@@ -45,7 +47,15 @@ public class ServerInfoService implements ApplicationListener<WebServerInitializ
 
     @PreDestroy
     void stopInstance() {
+    }
 
+    public Proxy getProxy() {
+        var sql = """
+                select *
+                from proxy
+                where status = 'active'
+                """;
+        return db.query(sql, (rs, i) -> new ProxyDTO(rs)).stream().findFirst().map(ProxyDTO::toProxyPlayWright).orElse(null);
     }
 
     @Override

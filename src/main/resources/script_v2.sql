@@ -23,7 +23,7 @@ create table if not exists `event_crawl`
 drop table if exists event_analyst;
 create table event_analyst
 (
-    event_id              int not null auto_increment primary key,
+    event_id        int not null auto_increment primary key,
     event_name      varchar(255),
     home_team       varchar(255),
     away_team       varchar(255),
@@ -177,4 +177,17 @@ create table schedule_manager
     status        enum ('active', 'inactive') default 'inactive',
     last_update   timestamp                   default current_timestamp on update current_timestamp,
     primary key (schedule_name, host_name)
+);
+
+drop table if exists proxy;
+create table if not exists proxy
+(
+    proxy_id   int auto_increment primary key,
+    address    varchar(50),
+    port       int,
+    username   varchar(50),
+    password   varchar(50),
+    status     varchar(20) default 'active',
+    created_at timestamp   default current_timestamp,
+    updated_at timestamp   default current_timestamp on update current_timestamp
 );

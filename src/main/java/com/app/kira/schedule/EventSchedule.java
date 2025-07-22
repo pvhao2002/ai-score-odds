@@ -52,7 +52,7 @@ public class EventSchedule {
     private final ServerInfoService serverInfoService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Scheduled(fixedDelay = 60, timeUnit = TimeUnit.SECONDS, initialDelay = 10)
+    @Scheduled(fixedDelay = 10, timeUnit = TimeUnit.SECONDS, initialDelay = 10)
     @Transactional
     public void event() {
         var sqlEvents = """
@@ -81,7 +81,7 @@ public class EventSchedule {
                 );
                 page.navigate(event.getDetailLink() + "/odds");
                 page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(30_000));
-                page.waitForTimeout(3_500);
+                page.waitForTimeout(2000);
                 var lookBoxes = page.querySelectorAll(".lookBox.brb");
                 if (!lookBoxes.isEmpty()) {
                     lookBoxes.getFirst().click();
@@ -166,7 +166,7 @@ public class EventSchedule {
         if (btnIndex > 0) {
             oddButtons.get(btnIndex - 1).click();
         }
-        page.waitForTimeout(3_500);
+        page.waitForTimeout(2000);
         Document doc = Jsoup.parse(page.content());
         return parseOdds(doc, config.rowMapper());
     }
