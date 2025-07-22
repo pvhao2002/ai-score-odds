@@ -75,7 +75,6 @@ public class OddSchedule {
     public void calculateOdds() {
         var result = jdbcTemplate.query(SQL_GET_EVENT_AND_ODD, (rs, i) -> new EventDTO(rs));
         if (result.isEmpty()) {
-            log.info("No odds to calculate");
             return;
         }
         result.stream()

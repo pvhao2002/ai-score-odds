@@ -25,8 +25,12 @@ create table event_analyst
 (
     event_id        int not null auto_increment primary key,
     event_name      varchar(255),
+
     home_team       varchar(255),
+    home_logo       text,
+    away_logo       text,
     away_team       varchar(255),
+
     league_name     varchar(255),
     event_date      datetime,
 
@@ -56,7 +60,7 @@ create table if not exists odd_analyst
 (
     event_id  int,
     odd_type  enum ('hdc', 'ou', '1x2', 'corner'),
-    odd_value text,
+    odd_value longtext,
     primary key (event_id, odd_type)
 );
 
@@ -190,4 +194,17 @@ create table if not exists proxy
     status     varchar(20) default 'active',
     created_at timestamp   default current_timestamp,
     updated_at timestamp   default current_timestamp on update current_timestamp
+);
+
+drop table if exists app_logs;
+create table if not exists app_logs
+(
+    log_id     serial primary key,
+    host_name  varchar(100),
+    level      varchar(20),
+    logger     varchar(100),
+    thread     varchar(100),
+    message    text,
+    created_at timestamp default now(),
+    index idx_host_name (host_name)
 );

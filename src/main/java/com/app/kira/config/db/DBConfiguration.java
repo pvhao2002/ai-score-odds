@@ -58,9 +58,12 @@ public class DBConfiguration {
     }
 
     @Bean
+    @Primary
     public DataSourceTransactionManager transactionManager(@WriteDB DataSource ds) {
         var txManager = new DataSourceTransactionManager();
         txManager.setDataSource(ds);
         return txManager;
     }
+
+
 }

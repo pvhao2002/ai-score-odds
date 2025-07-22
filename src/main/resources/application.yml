@@ -5,14 +5,21 @@ application:
       username: "${DB_USERNAME:root}"
       password: "${DB_PASSWORD:1234}"
       driver-class-name: com.mysql.cj.jdbc.Driver
-      maximum-pool-size: 30
+      maximum-pool-size: 15
       max-lifetime: 300000
       keepalive-time: 30000
 spring:
+  r2dbc:
+    url: "r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:kira}?useUnicode=true"
+    username: "${DB_USERNAME:root}"
+    password: "${DB_PASSWORD:1234}"
+
   servlet:
     multipart:
       max-file-size: 100MB
       max-request-size: 100MB
+  webflux:
+    base-path: /api
 management:
   endpoints:
     web:

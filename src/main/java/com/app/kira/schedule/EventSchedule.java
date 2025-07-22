@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -33,24 +34,109 @@ import java.util.logging.Level;
 public class EventSchedule {
     private static final String MONEY_LINE_1X2 = "1x2";
     private static final String HDC = "hdc";
+    private static final String HANDICAP = "handicap";
     private static final String OU = "ou";
     private static final String CORNER = "corner";
+    private static final String EVENT_ID = "event_id";
     private static final String EVENT_NAME = "event_name";
     private static final String EVENT_DATE = "event_date";
     private static final String ODD_VALUE = "odd_value";
     private static final String ODD_TYPE = "odd_type";
     private static final String SQL_INSERT_ODD_ANALYST = """
-                        INSERT INTO odd_analyst(event_id, odd_type, odd_value)
-                             SELECT e.event_id, :odd_type, :odd_value
-                             FROM event_analyst e
-                             WHERE TRUE
-                               AND e.event_name = :event_name
-                               AND e.event_date = :event_date
-                             ON DUPLICATE KEY UPDATE odd_value = :odd_value
+            INSERT INTO odd_analyst(event_id, odd_type, odd_value)
+                 SELECT e.event_id, :odd_type, :odd_value
+                 FROM event_analyst e
+                 WHERE TRUE
+                   AND e.event_name = :event_name
+                   AND e.event_date = :event_date
+                 ON DUPLICATE KEY UPDATE odd_value = values(odd_value)
+            """;
+
+    private static final String SQL_GET_EVENT_UPCOMING = """
+            select e.event_id, event_name, event_date, league_name, detail_link
+            from events e
+                     left join odds o on o.event_id = e.event_id
+            where true
+              and (
+                (event_date BETWEEN CONVERT_TZ(NOW(), '+00:00', '+07:00') AND CONVERT_TZ(NOW(), '+00:00', '+07:00') + INTERVAL 3 HOUR)
+                    OR
+                (o.event_id IS NULL)
+            )
+            GROUP BY e.event_id
+            """;
+    private static final String SQL_INSERT_ODD = """
+            insert into odds(odd_type, odd_value, event_id)
+                            values (:odd_type, :odd_value, :event_id)
+                            ON DUPLICATE KEY UPDATE
+                                odd_value = VALUES(odd_value)
             """;
 
     private final ServerInfoService serverInfoService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
+
+    @Scheduled(fixedDelay = 500, timeUnit = TimeUnit.SECONDS, initialDelay = 1)
+    public void crawlOddForUpcomingEvent() {
+        var events = jdbcTemplate.query(SQL_GET_EVENT_UPCOMING, (rs, i) -> new Event(rs));
+        if (CollectionUtils.isEmpty(events)) {
+            return;
+        }
+        PlaywrightUtil.withPlaywright(events, (page, list) -> list.forEach(event -> {
+            List<MapSqlParameterSource> result = new ArrayList<>();
+            try {
+                page.navigate(event.getDetailLink());
+                page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(30_000));
+                page.waitForTimeout(2000);
+                var lookBoxes = page.querySelectorAll(".lookBox.brb");
+                if (!lookBoxes.isEmpty()) {
+                    var bet = getOdd(page, lookBoxes);
+                    result.add(new MapSqlParameterSource()
+                            .addValue(EVENT_ID, event.getEventId())
+                            .addValue(ODD_VALUE, JsonUtil.toJson(bet.getOdds1x2()))
+                            .addValue(ODD_TYPE, MONEY_LINE_1X2));
+
+                    result.add(new MapSqlParameterSource()
+                            .addValue(EVENT_ID, event.getEventId())
+                            .addValue(ODD_VALUE, JsonUtil.toJson(bet.getOddsHandicap()))
+                            .addValue(ODD_TYPE, HANDICAP));
+
+                    result.add(new MapSqlParameterSource()
+                            .addValue(EVENT_ID, event.getEventId())
+                            .addValue(ODD_VALUE, JsonUtil.toJson(bet.getOddsGoal()))
+                            .addValue(ODD_TYPE, "goals"));
+
+                    result.add(new MapSqlParameterSource()
+                            .addValue(EVENT_ID, event.getEventId())
+                            .addValue(ODD_VALUE, JsonUtil.toJson(bet.getOddsCorner()))
+                            .addValue(ODD_TYPE, "corners"));
+
+                    jdbcTemplate.batchUpdate(SQL_INSERT_ODD, result.toArray(new MapSqlParameterSource[0]));
+                }
+            } catch (Exception ex) {
+                log.log(Level.SEVERE, "crawlOddForUpcomingEvent >> Crawl Event %s-%s-%s Failed".formatted(event.getEventId(), event.getEventName(), event.getDetailLink()), ex);
+            }
+        }));
+    }
+
+    private Bet getOdd(Page page, List<ElementHandle> lookBoxes) {
+        var bet = Bet.builder();
+        lookBoxes.getFirst().click();
+        var oddButton = page.querySelectorAll(".changeItem");
+        if (oddButton.size() >= 4) {
+            var oddsConfigMap = getOddsConfigMap();
+            var betSetterMap = getBetSetterMap();
+
+            for (int idx = 1; idx <= 4; idx++) {
+                OddsConfig<BaseOdd> config = oddsConfigMap.get(idx);
+                if (config == null) continue;
+                List<?> odds = clickAndParseOdds(page, oddButton, idx, config);
+                BiConsumer<Bet.BetBuilder, List<?>> setter = betSetterMap.get(idx);
+                if (setter != null) setter.accept(bet, odds);
+            }
+        }
+        var resultBet = bet.build();
+        resultBet.cleanOdd();
+        return resultBet;
+    }
 
     @Scheduled(fixedDelay = 10, timeUnit = TimeUnit.SECONDS, initialDelay = 10)
     @Transactional
@@ -72,34 +158,20 @@ public class EventSchedule {
         }
         PlaywrightUtil.withPlaywright(events, (page, list) -> list.forEach(event -> {
             List<MapSqlParameterSource> result = new ArrayList<>();
-            var bet = Bet.builder();
+            var baseParam = new MapSqlParameterSource("event_id", event.getId());
+            var paramWithHost = baseParam.addValue("os", serverInfoService.getHostName());
             try {
                 log.log(Level.INFO, "Crawl Event {0}-{1}-{2} Start", new Object[]{event.getId(), event.getEventName(), event.getDetailLink()});
                 jdbcTemplate.update(
-                        "update event_crawl set status = 'in_progress' where id = :id",
-                        new MapSqlParameterSource().addValue("id", event.getId())
+                        "update event_crawl set status = 'in_progress' where id = :event_id",
+                        baseParam
                 );
                 page.navigate(event.getDetailLink() + "/odds");
                 page.waitForSelector(".lookBox", new Page.WaitForSelectorOptions().setTimeout(30_000));
                 page.waitForTimeout(2000);
                 var lookBoxes = page.querySelectorAll(".lookBox.brb");
                 if (!lookBoxes.isEmpty()) {
-                    lookBoxes.getFirst().click();
-                    var oddButton = page.querySelectorAll(".changeItem");
-                    if (oddButton.size() >= 4) {
-                        var oddsConfigMap = getOddsConfigMap();
-                        var betSetterMap = getBetSetterMap();
-
-                        for (int idx = 1; idx <= 4; idx++) {
-                            OddsConfig<BaseOdd> config = oddsConfigMap.get(idx);
-                            if (config == null) continue;
-                            List<?> odds = clickAndParseOdds(page, oddButton, idx, config);
-                            BiConsumer<Bet.BetBuilder, List<?>> setter = betSetterMap.get(idx);
-                            if (setter != null) setter.accept(bet, odds);
-                        }
-                    }
-                    var resultBet = bet.build();
-                    resultBet.cleanOdd();
+                    var resultBet = getOdd(page, lookBoxes);
                     result.add(new MapSqlParameterSource()
                             .addValue(EVENT_NAME, event.getEventName())
                             .addValue(EVENT_DATE, event.getTime())
@@ -126,23 +198,24 @@ public class EventSchedule {
                     jdbcTemplate.batchUpdate(SQL_INSERT_ODD_ANALYST, result.toArray(new MapSqlParameterSource[0]));
                     jdbcTemplate.update("""
                               insert into pc(pc_name, event_id, status) VALUES (:os, :event_id, 'ok')
-                            """, new MapSqlParameterSource().addValue("event_id", event.getId()).addValue("os", serverInfoService.getHostName()));
+                            """, paramWithHost);
+                } else {
+                    jdbcTemplate.update("""
+                              insert into pc(pc_name, event_id, status, message) VALUES (:os, :event_id, 'ok', 'NOT_FOUND_ODD')
+                            """, paramWithHost);
                 }
             } catch (Exception ex) {
                 log.log(Level.SEVERE, "Crawl Event %s-%s-%s Failed".formatted(event.getId(), event.getEventName(), event.getDetailLink()), ex);
                 jdbcTemplate.update(
-                        "update event_crawl set status = 'failed' where id = :id",
-                        new MapSqlParameterSource().addValue("id", event.getId())
+                        "update event_crawl set status = 'failed' where id = :event_id",
+                        baseParam
                 );
                 jdbcTemplate.update("""
                         insert into pc(pc_name, event_id, status, message) VALUES (:os, :event_id, 'fail', :message)
-                          """, new MapSqlParameterSource()
-                        .addValue("message", ex.getMessage())
-                        .addValue("event_id", event.getId())
-                        .addValue("os", serverInfoService.getHostName()));
+                          """, paramWithHost.addValue("message", ex.getMessage()));
             } finally {
-                var sqlDel = "DELETE FROM event_crawl  WHERE id=:id AND status = 'in_progress'";
-                jdbcTemplate.update(sqlDel, new MapSqlParameterSource().addValue("id", event.getId()));
+                var sqlDel = "DELETE FROM event_crawl  WHERE id=:event_id AND status = 'in_progress'";
+                jdbcTemplate.update(sqlDel, baseParam);
                 log.log(Level.INFO, "Crawl Event {0}-{1}-{2} End", new Object[]{event.getId(), event.getEventName(), event.getDetailLink()});
             }
         }));

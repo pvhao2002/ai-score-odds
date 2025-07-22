@@ -20,7 +20,7 @@ import java.util.logging.Level;
 public class PlaywrightUtil {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
     private static final ServerInfoService SERVER_BEAN = ApplicationContextProvider.getBean(ServerInfoService.class);
-    private boolean isHeadless = true;
+    private boolean isHeadless = false;
     private boolean isUseProxy = true;
 
     public <P> void withPlaywright(List<P> list, BiConsumer<Page, List<P>> logic) {

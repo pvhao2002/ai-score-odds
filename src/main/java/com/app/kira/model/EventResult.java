@@ -100,15 +100,7 @@ public class EventResult {
     }
 
     public EventResult(Map.Entry<Long, List<EventDTO>> entry) {
-        this.eventId = entry.getKey();
-        this.eventName = entry.getValue().getFirst().getEventName();
-        this.leagueName = entry.getValue().getFirst().getLeagueName();
-        this.eventDate = entry.getValue().getFirst().getEventDate();
-
-        this.odds1x2 = getOddsByType(entry.getValue(), "1x2", Odd1x2.class);
-        this.oddsGoal = getOddsByType(entry.getValue(), "goals, ou", OddGoal.class);
-        this.oddsHandicap = getOddsByType(entry.getValue(), "handicap, hdc", OddHandicap.class);
-        this.oddsCorner = getOddsByType(entry.getValue(), "corners", OddCorner.class);
+        this(entry.getValue());
     }
 
     public EventResult(List<EventDTO> entry) {

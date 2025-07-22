@@ -13,24 +13,19 @@ create table teams
 drop table if exists events;
 create table events
 (
-    event_id      bigint auto_increment primary key,
-    detail_link   text,
-    event_name    varchar(255),
-    event_date    datetime,
-    league_name   varchar(355),
-    home_name     varchar(255),
-    away_name     varchar(255),
-    home_id       bigint,
-    away_id       bigint,
+    event_id       bigint auto_increment primary key,
+    detail_link    text,
+    event_name     varchar(255),
+    event_date     datetime,
+    league_name    varchar(355),
+    league_id      int,
     number_updated int       default 0,
     last_update    timestamp default current_timestamp on update current_timestamp,
     index idx_event (event_date, league_name, event_name),
-    index idx_event_teams (home_id, away_id),
-    index idx_event_date (event_date),
-    index idx_event_league (league_name),
-    constraint event_unique
-        unique (event_date, event_name)
+    index idx_event_league (league_id),
+    constraint event_unique unique (event_date, event_name)
 );
+
 
 drop table if exists odds;
 create table odds

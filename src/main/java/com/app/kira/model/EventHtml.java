@@ -43,26 +43,33 @@ public class EventHtml {
         this.time = ele.select(".time").text().concat(" %s".formatted(DateUtil.convertFormater1ToFormater2(date)));
         this.detailLink = ele.absUrl("href").replace("h2h", "odds");
 
-        this.ftHomeScore = parseScore(ele.select(".score-home.minitext").text());
-        this.ftAwayScore = parseScore(ele.select(".score-away.minitext").text());
-
         this.htScoreStr = ele.select(".half-over").text();
         this.ftScoreStr = ele.select(".scores.finished").text();
         this.cornerStr = ele.select(".corner.cornerBox").text();
+        var minus = "-";
 
-        var index = htScoreStr.indexOf("-");
-        if (index != -1) {
-            this.htHomeScore = parseScore(String.valueOf(htScoreStr.charAt(index - 1)));
-            this.htAwayScore = parseScore(String.valueOf(htScoreStr.charAt(index + 1)));
+        var ftScoreTemp = ftScoreStr.split(minus);
+        if (ftScoreTemp.length == 2) {
+            this.ftHomeScore = parseScore(ftScoreTemp[0].trim());
+            this.ftAwayScore = parseScore(ftScoreTemp[1].trim());
+        } else {
+            this.ftHomeScore = 0;
+            this.ftAwayScore = 0;
+        }
+
+        var htScoreTemp = htScoreStr.replace("HT", "").split(minus);
+        if (htScoreTemp.length == 2) {
+            this.htHomeScore = parseScore(htScoreTemp[0].trim());
+            this.htAwayScore = parseScore(htScoreTemp[1].trim());
         } else {
             this.htHomeScore = 0;
             this.htAwayScore = 0;
         }
 
-        index = cornerStr.indexOf("-");
-        if (index != -1) {
-            this.homeCorner = parseScore(String.valueOf(cornerStr.charAt(index - 1)));
-            this.awayCorner = parseScore(String.valueOf(cornerStr.charAt(index + 1)));
+        var cornerTemp = cornerStr.split(minus);
+        if (cornerTemp.length == 2) {
+            this.homeCorner = parseScore(cornerTemp[0].trim());
+            this.awayCorner = parseScore(cornerTemp[1].trim());
         } else {
             this.homeCorner = 0;
             this.awayCorner = 0;
