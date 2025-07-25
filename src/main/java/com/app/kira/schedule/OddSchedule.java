@@ -38,6 +38,7 @@ public class OddSchedule {
                      , ea.event_name
                      , ea.event_date
                      , ea.league_name
+                     , ea.link
                 from event_analyst ea
                          inner join oa on oa.event_id = ea.event_id
                          inner join odd_analyst oa2 on oa2.event_id = oa.event_id

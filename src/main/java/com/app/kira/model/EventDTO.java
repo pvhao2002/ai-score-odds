@@ -29,6 +29,6 @@ public class EventDTO {
         this.leagueName = rs.getString("league_name");
         this.oddType = rs.getString("odd_type");
         this.oddValue = rs.getString("odd_value");
-        this.detailLink = rs.getString("detail_link");
+        this.detailLink = rs.getString("link");
     }
 }
