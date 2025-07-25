@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -79,30 +78,28 @@ public class OddSchedule {
         }
         result.stream()
                 .collect(Collectors.groupingBy(EventDTO::getEventId))
-                .forEach(this::processEvent);
-    }
-
-    private void processEvent(Long key, List<EventDTO> value) {
-        var param = new MapSqlParameterSource(EVENT_ID_KEY, key);
-        try {
-            jdbcTemplate.update(SQL_DELETE_OLD_ODD_EVENT, param);
-            jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, IN_PROGRESS_STATUS));
-            var eventResult = new EventResult(value);
-            var odds = eventResult.parseOdd();
-            if (odds.isEmpty()) {
-                log.warning("No odds found for event: " + key);
-                jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, FAIL_STATUS));
-                return;
-            }
-            var paramOdds = odds
-                    .stream()
-                    .map(OddAnalyst::toParam)
-                    .toArray(SqlParameterSource[]::new);
-            jdbcTemplate.batchUpdate(SQL_INSERT_ODD_EVENT, paramOdds);
-            jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, DONE_STATUS));
-        } catch (Exception ex) {
-            log.log(Level.WARNING, "OddSchedule >> calculateOdds >> exception with event %s:".formatted(key), ex);
-            jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, FAIL_STATUS));
-        }
+                .forEach((key, value) -> {
+                    var param = new MapSqlParameterSource(EVENT_ID_KEY, key);
+                    try {
+                        jdbcTemplate.update(SQL_DELETE_OLD_ODD_EVENT, param);
+                        jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, IN_PROGRESS_STATUS));
+                        var eventResult = new EventResult(value);
+                        var odds = eventResult.parseOdd();
+                        if (odds.isEmpty()) {
+                            log.warning("No odds found for event: " + key);
+                            jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, FAIL_STATUS));
+                            return;
+                        }
+                        var paramOdds = odds
+                                .stream()
+                                .map(OddAnalyst::toParam)
+                                .toArray(SqlParameterSource[]::new);
+                        jdbcTemplate.batchUpdate(SQL_INSERT_ODD_EVENT, paramOdds);
+                        jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, DONE_STATUS));
+                    } catch (Exception ex) {
+                        log.log(Level.WARNING, "OddSchedule >> calculateOdds >> exception with event %s:".formatted(key), ex);
+                        jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, FAIL_STATUS));
+                    }
+                });
     }
 }

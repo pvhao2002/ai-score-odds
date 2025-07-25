@@ -58,8 +58,8 @@ public class EventSchedule {
                      left join odds o on o.event_id = e.event_id
             where true
               and (
-                (event_date BETWEEN CONVERT_TZ(NOW(), '+00:00', '+07:00') AND CONVERT_TZ(NOW(), '+00:00', '+07:00') + INTERVAL 3 HOUR)
-                    OR
+            --    (event_date BETWEEN CONVERT_TZ(NOW(), '+00:00', '+07:00') AND CONVERT_TZ(NOW(), '+00:00', '+07:00') + INTERVAL 3 HOUR)
+              --      OR
                 (o.event_id IS NULL)
             )
             GROUP BY e.event_id

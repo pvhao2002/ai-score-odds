@@ -2,6 +2,7 @@ package com.app.kira.model;
 
 import com.app.kira.model.analyst.OddAnalyst;
 import com.app.kira.util.DateUtil;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.*;
@@ -9,6 +10,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.util.CollectionUtils;
 
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Getter
@@ -20,8 +23,10 @@ public class EventResult {
     private static final Gson gson = new Gson();
     private Long eventId;
     private String eventName;
+    @JsonIgnore
     private String leagueName;
-    private Timestamp eventDate;
+    private String eventDate;
+    private String link;
     @Builder.Default
     private List<Odd1x2> odds1x2 = new ArrayList<>();
 
@@ -101,13 +106,28 @@ public class EventResult {
 
     public EventResult(Map.Entry<Long, List<EventDTO>> entry) {
         this(entry.getValue());
+        this.odds1x2 = getLatestOdd(this.getOdds1x2());
+        this.oddsGoal = getLatestOdd(this.getOddsGoal());
+        this.oddsHandicap = getLatestOdd(this.getOddsHandicap());
+        this.oddsCorner = getLatestOdd(this.getOddsCorner());
     }
+
+    private static <T extends BaseOdd> List<T> getLatestOdd(List<T> odds) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("h:mm a EEEE, MMMM d, yyyy", Locale.ENGLISH);
+        return odds.stream()
+                .filter(o -> StringUtils.isNotBlank(o.getOddDate()))
+                .max(Comparator.comparing(o -> LocalDateTime.parse(o.getOddDate(), formatter)))
+                .map(List::of)
+                .orElse(List.of());
+    }
+
 
     public EventResult(List<EventDTO> entry) {
         this.eventId = entry.getFirst().getEventId();
         this.eventName = entry.getFirst().getEventName();
         this.leagueName = entry.getFirst().getLeagueName();
         this.eventDate = entry.getFirst().getEventDate();
+        this.link = entry.getFirst().getDetailLink();
 
         this.odds1x2 = getOddsByType(entry, "1x2", Odd1x2.class);
         this.oddsGoal = getOddsByType(entry, "goals, ou", OddGoal.class);
