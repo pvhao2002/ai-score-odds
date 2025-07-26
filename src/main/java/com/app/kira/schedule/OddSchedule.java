@@ -26,25 +26,19 @@ public class OddSchedule {
     private static final String IN_PROGRESS_STATUS = "in_progress";
     private static final String EVENT_ID_KEY = "event_id";
     private static final String SQL_GET_EVENT_AND_ODD = """
-            with oa as (SELECT oa.event_id
-                            FROM odd_analyst oa
-                            WHERE TRUE
-                              AND odd_value <> '[]'
-                              AND (oa.status = 'pending' OR oa.status = 'fail')
-                            GROUP BY oa.event_id
-                            HAVING COUNT(DISTINCT oa.odd_type) >= 3
-                            LIMIT 120
-                            for update skip locked)
-                select oa2.event_id
-                     , oa2.odd_value
-                     , oa2.odd_type
-                     , ea.event_name
-                     , ea.event_date
-                     , ea.league_name
-                     , ea.link
-                from event_analyst ea
-                         inner join oa on oa.event_id = ea.event_id
-                         inner join odd_analyst oa2 on oa2.event_id = oa.event_id
+            select oa2.event_id
+                  , oa2.odd_value
+                  , oa2.odd_type
+                  , ea.event_name
+                  , ea.event_date
+                  , ea.league_name
+                  , ea.link
+             from event_analyst ea
+                      inner join odd_analyst oa2 on oa2.event_id = ea.event_id
+             WHERE (oa2.status = 'pending' OR oa2.status = 'fail')
+             LIMIT 1200
+             for
+             update skip locked
             """;
     private static final String SQL_DELETE_OLD_ODD_EVENT = """
             delete
@@ -79,11 +73,16 @@ public class OddSchedule {
         result.stream()
                 .collect(Collectors.groupingBy(EventDTO::getEventId))
                 .forEach((key, value) -> {
+                    log.log(Level.INFO, "OddSchedule >> calculateOdds >> processing event: {0}", key);
                     var param = new MapSqlParameterSource(EVENT_ID_KEY, key);
                     try {
-                        jdbcTemplate.update(SQL_DELETE_OLD_ODD_EVENT, param);
                         jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, IN_PROGRESS_STATUS));
                         var eventResult = new EventResult(value);
+                        if(eventResult.getOddsGoal().isEmpty() && eventResult.getOddsHandicap().isEmpty()) {
+                            log.log(Level.WARNING, "Handicap and over under odd not found: {0}", key);
+                            jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, DONE_STATUS));
+                            return;
+                        }
                         var odds = eventResult.parseOdd();
                         if (odds.isEmpty()) {
                             log.warning("No odds found for event: " + key);
@@ -94,6 +93,7 @@ public class OddSchedule {
                                 .stream()
                                 .map(OddAnalyst::toParam)
                                 .toArray(SqlParameterSource[]::new);
+                        jdbcTemplate.update(SQL_DELETE_OLD_ODD_EVENT, param);
                         jdbcTemplate.batchUpdate(SQL_INSERT_ODD_EVENT, paramOdds);
                         jdbcTemplate.update(SQL_UPDATE_ODD_ANALYST_STATUS, param.addValue(STATUS_KEY, DONE_STATUS));
                     } catch (Exception ex) {
