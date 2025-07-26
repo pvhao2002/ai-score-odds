@@ -30,8 +30,11 @@ public class OddSchedule {
                             FROM odd_analyst oa
                             WHERE TRUE
                               AND odd_value <> '[]'
+                              AND (oa.status = 'pending' OR oa.status = 'fail')
                             GROUP BY oa.event_id
-                            HAVING COUNT(DISTINCT oa.odd_type) >= 3)
+                            HAVING COUNT(DISTINCT oa.odd_type) >= 3
+                            LIMIT 120
+                            for update skip locked)
                 select oa2.event_id
                      , oa2.odd_value
                      , oa2.odd_type
@@ -42,10 +45,6 @@ public class OddSchedule {
                 from event_analyst ea
                          inner join oa on oa.event_id = ea.event_id
                          inner join odd_analyst oa2 on oa2.event_id = oa.event_id
-                where true
-                  and (oa2.status = 'pending' or oa2.status = 'fail')
-                limit 120
-                for update skip locked
             """;
     private static final String SQL_DELETE_OLD_ODD_EVENT = """
             delete
